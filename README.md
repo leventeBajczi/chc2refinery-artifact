@@ -1,5 +1,39 @@
 # CHC-COMP Model Validation
 
+## Refinery
+
+This fork adds one solver to the CHC-COMP 2026 setup: the [Refinery](https://refinery.tools/)
+graph solver, with the [chc2refinery](https://github.com/leventeBajczi/chc2refinery) translation
+of CHCs into Refinery problems. A model that Refinery generates is a derivation of `false`, so the
+solver answers `unsat` when it finds one, `sat` when Refinery proves that no model exists, and
+`unknown` otherwise (e.g., for unsupported features).
+
+* `make tools/refinery` builds the tool: Refinery at a fixed commit with the fixes of
+  chc2refinery's `refinery.patch` (built with Gradle; this needs network access to Maven
+  Central), chc2refinery at a fixed commit, and a JDK 25 to run on.
+* [`wrappers/refinery-chc`](wrappers/refinery-chc) runs the translation and Refinery, and prints
+  the verdict. [`tooldefs/refinery.py`](tooldefs/refinery.py) is its BenchExec tool definition.
+* [`benchmark-defs/refinery.xml.template`](benchmark-defs/refinery.xml.template) enters all nine
+  categories of the solver track, with the competition's limits. Refinery does not produce
+  models of satisfiable problems, so it does not enter the model track.
+
+### Running only Refinery
+
+The 2026 results of the other solvers are [published](https://chc-comp.github.io/chc-comp-2026/tables/),
+so a run of Refinery alone is enough to compare against them:
+
+```bash
+make download-refinery                    # benchexec, the benchmarks, and tools/refinery only
+make setup-benchmark                      # or: make setup-test
+source benchmark-utils/local_config.sh
+make verification-refinery                # results/refinery.*.results.CHC-COMP2026_check-sat.*.xml
+make plain-verifier-tables plain-overall-tables  # generated/tables/results-refinery-*.html
+```
+
+`make process-results` also works on these results alone. Expected verdicts are read from the
+benchmark `.yml` files (`RELABEL_BY_MAJORITY_VOTE = False` in `configs.py`), so no other solver is
+needed to score Refinery's answers.
+
 ## Adding / Editing Solvers
 
 Verifiers, model-producing verifiers, and validators are **auto-discovered** from
@@ -79,6 +113,7 @@ Trigger it manually via the Actions tab (`workflow_dispatch`).
 | Target                          | Description                                                  |
 |---------------------------------|--------------------------------------------------------------|
 | `make download-all`             | Download all dependencies (tools, benchexec, benchmarks).    |
+| `make download-refinery`        | Download benchexec and the benchmarks, and build only Refinery. |
 | `make setup-benchmark`          | Point benchmarks at the full suite.                          |
 | `make setup-test`               | Point benchmarks at a small smoke-test subset.               |
 | `make verify-all`               | Run all verifiers (plain + model).                           |

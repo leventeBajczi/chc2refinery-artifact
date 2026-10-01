@@ -67,6 +67,7 @@ SOLVER_DISPLAY = {
     "loat":         "LoAT",
     "mucyc":        "muCYC",
     "pcsat":        "PCSat",
+    "refinery":     "Refinery",
     "spacer":       "Spacer",
     "theta":        "Theta",
     "z4":           "Z4",
@@ -81,6 +82,7 @@ SOLVER_LATEX_MACROS = {
     "loat":         "Loat",
     "mucyc":        "Mucyc",
     "pcsat":        "Pcsat",
+    "refinery":     "Refinery",
     "spacer":       "Spacer",
     "theta":        "Theta",
     "z4":           "ZFour",  # LaTeX command names may not contain digits
@@ -98,6 +100,7 @@ SOLVER_COLORS = {
     "loat":         "#d62728",
     "mucyc":        "#9467bd",
     "pcsat":        "#8c564b",
+    "refinery":     "#17becf",
     "spacer":       "#e377c2",
     "theta":        "#7f7f7f",
     "z4":           "#bcbd22",

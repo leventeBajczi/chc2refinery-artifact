@@ -1,0 +1,90 @@
+#!/usr/bin/env python3
+"""Decide a CHC-COMP benchmark with chc2refinery and the Refinery graph solver.
+
+The benchmark is translated into a Refinery problem whose models are derivations of false
+(https://github.com/leventeBajczi/chc2refinery), and `refinery generate` searches for one.
+The last line of the output is the verdict:
+
+  unsat    Refinery generated a model, i.e., a counterexample.
+  sat      Refinery proved that no model exists (only without --max-facts).
+  unknown  The benchmark uses unsupported features, Z3 gave up, or Refinery failed.
+
+This script, chc2refinery.py, the Refinery CLI (refinery-generator-cli/) and a JDK (jdk/)
+are installed side by side by `make tools/refinery`.
+"""
+import argparse
+import os
+import subprocess
+import sys
+import tempfile
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+sys.path.insert(0, HERE)
+
+import chc2refinery as c2r  # noqa: E402
+
+CLI = os.path.join(HERE, 'refinery-generator-cli', 'bin', 'refinery-generator-cli')
+JDK = os.path.join(HERE, 'jdk')
+# Z3 must not give up before the run does, or Refinery misses models; the limits are Java ints.
+Z3_RLIMIT = 2**31 - 1
+Z3_TIMEOUT_MS = 30 * 60 * 1000
+
+
+def version() -> str:
+    with open(os.path.join(HERE, 'VERSION')) as f:
+        return f.readline().strip()
+
+
+def log(message: str):
+    print(message, file=sys.stderr, flush=True)
+
+
+def solve(args) -> str:
+    try:
+        with open(args.input) as f:
+            enc = c2r.translate(c2r.parse_chc(f.read()), os.path.basename(args.input),
+                                args.max_facts, args.dag, args.no_repeat)
+    except c2r.Unsupported as e:
+        log(f'chc2refinery: unsupported: {e}')
+        return 'unknown'
+    # Z3 and OR-Tools unpack their native libraries into the temporary directory.
+    with tempfile.TemporaryDirectory(prefix='refinery-chc-') as tmp:
+        problem, model = os.path.join(tmp, 'chc.problem'), os.path.join(tmp, 'model.json')
+        with open(problem, 'w') as f:
+            f.write(enc.text)
+        env = dict(os.environ, JAVA_HOME=JDK,
+                   REFINERY_Z3_MAX_RLIMIT=str(Z3_RLIMIT), REFINERY_Z3_DEFAULT_RLIMIT=str(Z3_RLIMIT),
+                   REFINERY_Z3_MAX_TIMEOUT_MS=str(Z3_TIMEOUT_MS), REFINERY_Z3_DEFAULT_TIMEOUT_MS=str(Z3_TIMEOUT_MS))
+        env['JAVA_OPTS'] = f"{env.get('JAVA_OPTS', '')} -Djava.io.tmpdir={tmp} -XX:MaxRAMPercentage=50".strip()
+        proc = subprocess.run([CLI, 'generate', '-f', 'json', '-o', model, problem],
+                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env)
+        output = proc.stdout
+        for line in output.splitlines():
+            log(f'refinery: {line}')
+        if proc.returncode == 0 and os.path.exists(model):
+            return 'unsat'
+    # A model can only be missing because none exists if the search was not bounded.
+    if args.max_facts is None and ('UnsatisfiableProblemException' in output
+                                   or 'Propagation failed: SMT problem is not satisfiable' in output):
+        return 'sat'
+    return 'unknown'
+
+
+def main(argv=None) -> int:
+    if argv is None:
+        argv = sys.argv[1:]
+    if argv == ['--version']:
+        print(version())
+        return 0
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument('input', help='CHC-COMP benchmark (.smt2)')
+    parser.add_argument('--max-facts', type=int, help='upper bound on the number of facts in a derivation')
+    parser.add_argument('--dag', action='store_true', help='share facts between derivation steps')
+    parser.add_argument('--allow-repeat', dest='no_repeat', action='store_false',
+                        help='allow a fact to repeat along a derivation path')
+    print(solve(parser.parse_args(argv)), flush=True)
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())
