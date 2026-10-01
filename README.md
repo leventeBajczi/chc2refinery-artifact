@@ -19,18 +19,22 @@ solver answers `unsat` when it finds one, `sat` when Refinery proves that no mod
 
 ### Running only Refinery
 
-The 2026 results of the other solvers are [published](https://chc-comp.github.io/chc-comp-2026/tables/),
+The 2026 results of the other solvers are [published](https://doi.org/10.5281/zenodo.20413019),
 so a run of Refinery alone is enough to compare against them:
 
 ```bash
 make download-refinery                    # benchexec, the benchmarks, and tools/refinery only
+make download-results-2026                # the published 2026 results, into results/
 make setup-benchmark                      # or: make setup-test
 source benchmark-utils/local_config.sh
 make verification-refinery                # results/refinery.*.results.CHC-COMP2026_check-sat.*.xml
-make plain-verifier-tables plain-overall-tables  # generated/tables/results-refinery-*.html
+make process-results                      # tables of all solvers, in generated/
 ```
 
-`make process-results` also works on these results alone. Expected verdicts are read from the
+`make download-results-2026` extracts only the result files (45 MB of the 2 GB archive) with
+[`fetch-2026-results.py`](fetch-2026-results.py); `make download-results-2026-logfiles` also
+extracts the run logs (5.6 GB), which the result pages link to. Without the 2026 results,
+`make process-results` generates tables of Refinery alone. Expected verdicts are read from the
 benchmark `.yml` files (`RELABEL_BY_MAJORITY_VOTE = False` in `configs.py`), so no other solver is
 needed to score Refinery's answers.
 
@@ -114,6 +118,7 @@ Trigger it manually via the Actions tab (`workflow_dispatch`).
 |---------------------------------|--------------------------------------------------------------|
 | `make download-all`             | Download all dependencies (tools, benchexec, benchmarks).    |
 | `make download-refinery`        | Download benchexec and the benchmarks, and build only Refinery. |
+| `make download-results-2026`    | Extract the published CHC-COMP 2026 results into `results/`. |
 | `make setup-benchmark`          | Point benchmarks at the full suite.                          |
 | `make setup-test`               | Point benchmarks at a small smoke-test subset.               |
 | `make verify-all`               | Run all verifiers (plain + model).                           |

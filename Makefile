@@ -87,6 +87,15 @@ download-all: benchexec chc-comp26-benchmarks-full chc-comp26-benchmarks-test do
 # Everything needed to run only Refinery (the 2026 results of the other tools are published).
 download-refinery: benchexec chc-comp26-benchmarks-full chc-comp26-benchmarks-test $(TOOLS_DIRECTORY)/refinery
 
+# The published CHC-COMP 2026 results (https://doi.org/10.5281/zenodo.20413019) in results/, so that
+# process-results compares new results against them. Only the result files are downloaded (45 MB);
+# download-results-2026-logfiles also extracts the run logs (5.6 GB).
+download-results-2026:
+	python3 ./fetch-2026-results.py
+
+download-results-2026-logfiles:
+	python3 ./fetch-2026-results.py --logfiles
+
 ############# Download Tools
 
 ######################## Targets

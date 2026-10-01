@@ -14,3 +14,4 @@ witnesses/*
 **/__pycache__
 data-analysis/cache
 .venv
+upload.zip
