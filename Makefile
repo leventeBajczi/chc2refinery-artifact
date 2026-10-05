@@ -193,7 +193,7 @@ $(TOOLS_DIRECTORY)/z4:
 # Refinery is built from source at a fixed commit with chc2refinery's two patches: refinery.patch (fixes)
 # and refinery-bv-fp.patch (bit-vector and floating-point attributes), and runs on a bundled JDK 25.
 # The wrapper wrappers/refinery-chc runs chc2refinery.py, whose first output line is the verdict.
-CHC2REFINERY_COMMIT = 7d4dd7adf0f939a66e222a6c8d70950097ca1ffa
+CHC2REFINERY_COMMIT = 559bff7413e03a3a2e59340b49408c55d4498726
 REFINERY_COMMIT = 2f5c545ac3bb1d3f799b9590602371ba834ea902
 REFINERY_JDK = https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.1%2B8/OpenJDK25U-jdk_x64_linux_hotspot_25.0.1_8.tar.gz
 
