@@ -17,8 +17,8 @@ verdict stops the other):
 The answer is `unknown` if neither mode decides (e.g., for unsupported features).
 
 * `make tools/refinery` builds the tool: Refinery at a fixed commit with chc2refinery's two
-  patches, [`refinery.patch`](https://github.com/leventeBajczi/chc2refinery/blob/main/refinery.patch)
-  (fixes) and [`refinery-bv-fp.patch`](https://github.com/leventeBajczi/chc2refinery/blob/main/refinery-bv-fp.patch)
+  patches, [`refinery.patch`](https://github.com/leventeBajczi/chc2refinery/blob/main/patches/refinery.patch)
+  (fixes) and [`refinery-bv-fp.patch`](https://github.com/leventeBajczi/chc2refinery/blob/main/patches/refinery-bv-fp.patch)
   (bit-vector and floating-point attributes), built with Gradle (this needs network access to
   Maven Central); chc2refinery at a fixed commit; and a JDK 25 to run on. The Z3 Python package
   is not needed: the tool does not check its answers with Z3 (chc2refinery's `--check`).

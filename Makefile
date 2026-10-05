@@ -193,7 +193,7 @@ $(TOOLS_DIRECTORY)/z4:
 # Refinery is built from source at a fixed commit with chc2refinery's two patches: refinery.patch (fixes)
 # and refinery-bv-fp.patch (bit-vector and floating-point attributes), and runs on a bundled JDK 25.
 # The wrapper wrappers/refinery-chc runs chc2refinery.py, whose first output line is the verdict.
-CHC2REFINERY_COMMIT = 559bff7413e03a3a2e59340b49408c55d4498726
+CHC2REFINERY_COMMIT = b9119d8606ad9e4b56ea4f6f92e99a5cec34b2da
 REFINERY_COMMIT = 2f5c545ac3bb1d3f799b9590602371ba834ea902
 REFINERY_JDK = https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.1%2B8/OpenJDK25U-jdk_x64_linux_hotspot_25.0.1_8.tar.gz
 
@@ -207,7 +207,7 @@ $(TOOLS_DIRECTORY)/refinery:
 		&& git fetch -q --depth 1 https://github.com/leventeBajczi/chc2refinery $(CHC2REFINERY_COMMIT) && git checkout -q FETCH_HEAD
 	cp $@-build/chc2refinery/chc2refinery.py $@-build/chc2refinery/finite.py $@-build/chc2refinery/visualize.py $@/
 	cd $@-build/refinery && git init -q && git fetch -q --depth 1 https://github.com/graphs4value/refinery $(REFINERY_COMMIT) \
-		&& git checkout -q FETCH_HEAD && git apply ../chc2refinery/refinery.patch && git apply ../chc2refinery/refinery-bv-fp.patch
+		&& git checkout -q FETCH_HEAD && git apply ../chc2refinery/patches/refinery.patch && git apply ../chc2refinery/patches/refinery-bv-fp.patch
 	cd $@-build/refinery && JAVA_HOME=$(abspath $@/jdk) ./gradlew --no-daemon :refinery-generator-cli:installDist
 	cp -r $@-build/refinery/subprojects/generator-cli/build/install/refinery-generator-cli $@/
 	cp -r $@-build/refinery/LICENSE $@-build/refinery/LICENSES $@/
