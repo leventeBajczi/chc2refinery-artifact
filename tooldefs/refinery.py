@@ -10,13 +10,15 @@ import benchexec.tools.chc
 
 class Tool(benchexec.tools.chc.ChcTool):
     """
-    Tool info for Refinery with the chc2refinery translation
-    (https://github.com/leventeBajczi/chc2refinery).
+    Tool info for Refinery with chc2refinery (https://github.com/leventeBajczi/chc2refinery),
+    which proves CHC problems unsat or sat with the Refinery graph solver.
     """
 
     REQUIRED_PATHS = [
         "refinery-chc",
         "chc2refinery.py",
+        "finite.py",
+        "visualize.py",
         "VERSION",
         "jdk",
         "refinery-generator-cli",

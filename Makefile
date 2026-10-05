@@ -188,10 +188,12 @@ $(TOOLS_DIRECTORY)/z4:
 	chmod +x $(TOOLS_DIRECTORY)/z4/z4
 	rm $(TOOLS_DIRECTORY)/z4.tar.gz
 
-# Refinery with the chc2refinery translation of CHCs (https://github.com/leventeBajczi/chc2refinery).
-# Refinery is built from source at a fixed commit with the fixes in chc2refinery's refinery.patch,
-# and runs on a bundled JDK 25. The wrapper wrappers/refinery-chc prints the verdict.
-CHC2REFINERY_COMMIT = 0ac9b31862eba927846bc10713fc0635d51bcf22
+# Refinery with chc2refinery (https://github.com/leventeBajczi/chc2refinery), which proves CHC problems
+# unsat (a derivation of false) or sat (an exhausted search, or a finite model over datatypes) with Refinery.
+# Refinery is built from source at a fixed commit with chc2refinery's two patches: refinery.patch (fixes)
+# and refinery-bv-fp.patch (bit-vector and floating-point attributes), and runs on a bundled JDK 25.
+# The wrapper wrappers/refinery-chc runs chc2refinery.py, whose first output line is the verdict.
+CHC2REFINERY_COMMIT = 7d4dd7adf0f939a66e222a6c8d70950097ca1ffa
 REFINERY_COMMIT = 2f5c545ac3bb1d3f799b9590602371ba834ea902
 REFINERY_JDK = https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.1%2B8/OpenJDK25U-jdk_x64_linux_hotspot_25.0.1_8.tar.gz
 
@@ -203,14 +205,14 @@ $(TOOLS_DIRECTORY)/refinery:
 	tar xzf $@-build/jdk.tar.gz -C $@/jdk --strip-components=1
 	mkdir -p $@-build/chc2refinery && cd $@-build/chc2refinery && git init -q \
 		&& git fetch -q --depth 1 https://github.com/leventeBajczi/chc2refinery $(CHC2REFINERY_COMMIT) && git checkout -q FETCH_HEAD
-	cp $@-build/chc2refinery/chc2refinery.py $@/
+	cp $@-build/chc2refinery/chc2refinery.py $@-build/chc2refinery/finite.py $@-build/chc2refinery/visualize.py $@/
 	cd $@-build/refinery && git init -q && git fetch -q --depth 1 https://github.com/graphs4value/refinery $(REFINERY_COMMIT) \
-		&& git checkout -q FETCH_HEAD && git apply ../chc2refinery/refinery.patch
+		&& git checkout -q FETCH_HEAD && git apply ../chc2refinery/refinery.patch && git apply ../chc2refinery/refinery-bv-fp.patch
 	cd $@-build/refinery && JAVA_HOME=$(abspath $@/jdk) ./gradlew --no-daemon :refinery-generator-cli:installDist
 	cp -r $@-build/refinery/subprojects/generator-cli/build/install/refinery-generator-cli $@/
 	cp -r $@-build/refinery/LICENSE $@-build/refinery/LICENSES $@/
 	cp wrappers/refinery-chc $@/ && chmod +x $@/refinery-chc
-	echo "chc2refinery $(CHC2REFINERY_COMMIT), Refinery $(REFINERY_COMMIT) with refinery.patch" > $@/VERSION
+	echo "chc2refinery $(CHC2REFINERY_COMMIT), Refinery $(REFINERY_COMMIT) with refinery.patch and refinery-bv-fp.patch" > $@/VERSION
 	rm -rf $@-build
 
 ### Below are the validators.

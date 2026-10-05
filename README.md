@@ -3,19 +3,32 @@
 ## Refinery
 
 This fork adds one solver to the CHC-COMP 2026 setup: the [Refinery](https://refinery.tools/)
-graph solver, with the [chc2refinery](https://github.com/leventeBajczi/chc2refinery) translation
-of CHCs into Refinery problems. A model that Refinery generates is a derivation of `false`, so the
-solver answers `unsat` when it finds one, `sat` when Refinery proves that no model exists, and
-`unknown` otherwise (e.g., for unsupported features).
+graph solver, driven by [chc2refinery](https://github.com/leventeBajczi/chc2refinery), a single
+command that proves CHC problems with Refinery in two modes, which run in parallel (the first
+verdict stops the other):
 
-* `make tools/refinery` builds the tool: Refinery at a fixed commit with the fixes of
-  chc2refinery's `refinery.patch` (built with Gradle; this needs network access to Maven
-  Central), chc2refinery at a fixed commit, and a JDK 25 to run on.
-* [`wrappers/refinery-chc`](wrappers/refinery-chc) runs the translation and Refinery, and prints
-  the verdict. [`tooldefs/refinery.py`](tooldefs/refinery.py) is its BenchExec tool definition.
+* `--prove-unsat`: a model of the generated Refinery problem is a derivation of `false`, so the
+  answer is `unsat` when Refinery finds one, and `sat` when Refinery shows that none exists and
+  the encoding is exact (no derivation was excluded for using a value that SMT-LIB leaves
+  unspecified);
+* `--prove-sat`: a model is a finite model of the clauses over algebraic datatypes (a tree
+  automaton), so the answer is `sat`; problems with other sorts are refused.
+
+The answer is `unknown` if neither mode decides (e.g., for unsupported features).
+
+* `make tools/refinery` builds the tool: Refinery at a fixed commit with chc2refinery's two
+  patches, [`refinery.patch`](https://github.com/leventeBajczi/chc2refinery/blob/main/refinery.patch)
+  (fixes) and [`refinery-bv-fp.patch`](https://github.com/leventeBajczi/chc2refinery/blob/main/refinery-bv-fp.patch)
+  (bit-vector and floating-point attributes), built with Gradle (this needs network access to
+  Maven Central); chc2refinery at a fixed commit; and a JDK 25 to run on. The Z3 Python package
+  is not needed: the tool does not check its answers with Z3 (chc2refinery's `--check`).
+* [`wrappers/refinery-chc`](wrappers/refinery-chc) runs `chc2refinery.py` with the bundled
+  Refinery; the first line of its output is the verdict, followed by the witness (the derivation,
+  or the finite model). Options, e.g., `--prove-unsat` to run one mode only, are passed on.
+  [`tooldefs/refinery.py`](tooldefs/refinery.py) is its BenchExec tool definition.
 * [`benchmark-defs/refinery.xml.template`](benchmark-defs/refinery.xml.template) enters all nine
-  categories of the solver track, with the competition's limits. Refinery does not produce
-  models of satisfiable problems, so it does not enter the model track.
+  categories of the solver track, with the competition's limits. Refinery does not enter the
+  model track.
 
 ### Running only Refinery
 
