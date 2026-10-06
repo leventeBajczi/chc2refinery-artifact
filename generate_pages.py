@@ -324,15 +324,9 @@ def generate_grid(html, tools, categories, results_dir, tables_dir,
     if len(parts) > 1:
         html.append('<tr><td></td>')
         for _ in list(categories) + ['overall']:
-            html.extend(f'<th>{label}</th>' for _, label in parts)
+            html.extend(f'<th class="part">{label}</th>' for _, label in parts)
         html.append('</tr>')
 
-    # Sub-header row explaining columns
-    html.append('<tr><td></td>')
-    for _ in list(categories) + ['overall']:
-        html.extend('<td style="font-size:0.8em;color:#666">score&nbsp;/&nbsp;correct&nbsp;/&nbsp;wrong&nbsp;/&nbsp;total</td>'
-                    for _ in parts)
-    html.append('</tr>')
 
     # Determine table name suffix for per-verifier links
     table_suffix = f'-{kind}' if kind else ''
@@ -397,7 +391,7 @@ def _render_cell(counts, table_file, col_id, is_hc=False):
     if counts is None:
         return '<td class="no-data">-</td>'
     correct, wrong, total = counts
-    counts_str = f'{correct}&nbsp;/&nbsp;{wrong}&nbsp;/&nbsp;{total}'
+    counts_str = f'{correct}/{wrong}/{total}'
     hc_attr = ' data-hc="true"' if is_hc else ''
     inner = (
         f'<span class="score-cell" data-col-id="{col_id}" '
@@ -428,20 +422,21 @@ def generate_html(args):
     html.append('<title>CHC-COMP 2026 Results</title>')
     html.append('<style>')
     html.append("""
-body { font-family: sans-serif; max-width: 1600px; margin: 2em auto; padding: 0 1em; }
+body { font-family: sans-serif; max-width: 1800px; margin: 2em auto; padding: 0 1em; }
 h1 { border-bottom: 2px solid #333; padding-bottom: .3em; }
 h2 { margin-top: 1.5em; }
-table { border-collapse: collapse; margin: 1em 0; }
-th, td { border: 1px solid #ccc; padding: 6px 10px; text-align: center; white-space: nowrap; }
+table { border-collapse: collapse; margin: 1em 0; font-size: 0.8em; }
+th, td { border: 1px solid #ccc; padding: 3px 3px; text-align: center; white-space: nowrap; }
+th.part { font-size: 0.8em; font-weight: normal; }
 th { background: #f5f5f5; }
 td:first-child, th:first-child { text-align: left; font-weight: bold; }
 a { color: #0366d6; text-decoration: none; }
 a:hover { text-decoration: underline; }
 .no-data { color: #999; }
 .score-cell { display: inline-block; }
-.score-value { font-weight: bold; font-size: 1.05em; }
-.medal { font-size: 1.1em; margin-right: 2px; }
-.counts { font-size: 0.85em; color: #555; }
+.score-value { font-weight: bold; }
+.medal { margin-right: 1px; }
+.counts { font-size: 0.8em; color: #555; }
 .scoring-bar { display: flex; align-items: center; gap: 0.7em; margin: 1em 0 0.5em 0;
                background: #f8f8f8; border: 1px solid #ddd; border-radius: 6px;
                padding: 0.5em 1em; width: fit-content; }
@@ -474,7 +469,7 @@ tr.hors-concours td:first-child { font-weight: normal; }
 
     html.append(
         '<p>Each cell shows the <em>score</em> (bold) and '
-        '<em>correct&nbsp;/&nbsp;wrong&nbsp;/&nbsp;total</em> task counts. '
+        '<em>correct/wrong/total</em> task counts. '
         'In the solver track, every column is split into the benchmarks whose expected verdict is '
         '<em>SAT</em> and those whose expected verdict is <em>UNSAT</em>, ranked separately. '
         'Click a cell to view the detailed table. '
