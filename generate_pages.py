@@ -3,7 +3,8 @@
 
 Creates a grid-based index page with:
 - Solver track (plain verifiers) and Model track (model verifiers) sections
-- Tools × categories grid with score + correct/wrong/total summary links
+- Tools × categories grid with score + correct/wrong/total summary links (in the
+  solver track, separately for the sat and the unsat benchmarks)
 - Overall per-tool columns linking to overall cross-verifier tables
 - Cross-verifier table links in column headers
 - Dynamic scoring with gold/silver/bronze medal rankings
@@ -45,24 +46,35 @@ def find_latest_xml(results_dir, pattern, tool_prefix=None):
 
 def extract_counts(xml_path):
     """Extract correct/wrong/total counts from an XML result file."""
+    counts = extract_counts_by_verdict(xml_path)
+    return counts['all'] if counts else None
+
+
+# Expected verdicts of the benchmarks: sat benchmarks have expectedVerdict="true", unsat ones "false".
+VERDICTS = {'true': 'sat', 'false': 'unsat'}
+
+
+def extract_counts_by_verdict(xml_path):
+    """Extract correct/wrong/total counts of all benchmarks ('all'), and of the sat ('sat') and the
+    unsat ('unsat') benchmarks; benchmarks without an expected verdict count only in 'all'."""
     if not xml_path or not os.path.exists(xml_path):
         return None
     try:
         tree = ET.parse(xml_path)
         root = tree.getroot()
-        correct = 0
-        wrong = 0
-        total = 0
+        counts = {key: [0, 0, 0] for key in ('all', 'sat', 'unsat')}
         for run in root.findall('run'):
-            total += 1
-            for col in run.findall('column'):
-                if col.get('title') == 'category':
-                    val = col.get('value', '')
-                    if val == 'correct':
-                        correct += 1
-                    elif val == 'wrong':
-                        wrong += 1
-        return correct, wrong, total
+            keys = ['all'] + ([VERDICTS[run.get('expectedVerdict')]]
+                              if run.get('expectedVerdict') in VERDICTS else [])
+            category = next((col.get('value', '') for col in run.findall('column')
+                             if col.get('title') == 'category'), '')
+            for key in keys:
+                counts[key][2] += 1
+                if category == 'correct':
+                    counts[key][0] += 1
+                elif category == 'wrong':
+                    counts[key][1] += 1
+        return {key: tuple(value) for key, value in counts.items()}
     except Exception as e:
         print(f"WARNING: Failed to parse {xml_path}: {e}")
         return None
@@ -273,9 +285,15 @@ def generate_grid(html, tools, categories, results_dir, tables_dir,
 
     track_id is a short unique string used to namespace column IDs so that
     medals are ranked independently between the solver and model tracks.
+    The solver track (kind '') shows the sat and the unsat benchmarks of every
+    column separately, in two sub-columns that link to the same table and are
+    ranked separately.
     hc_tools is the set of hors concours tool basenames.
     """
     sorted_tools = sorted(tools)
+    # Sub-columns of every column: sat and unsat benchmarks in the solver track, all benchmarks otherwise
+    parts = [('sat', 'SAT'), ('unsat', 'UNSAT')] if not kind else [('all', None)]
+    span = f' colspan="{len(parts)}"' if len(parts) > 1 else ''
     html.append('<table>')
 
     # Header row
@@ -286,27 +304,34 @@ def generate_grid(html, tools, categories, results_dir, tables_dir,
                                      prefer_multi=True)
         if cross_file:
             html.append(
-                f'<th data-col-id="{col_id}">'
+                f'<th data-col-id="{col_id}"{span}>'
                 f'<a href="{cross_file}">{cat}</a></th>')
         else:
-            html.append(f'<th data-col-id="{col_id}">{cat}</th>')
+            html.append(f'<th data-col-id="{col_id}"{span}>{cat}</th>')
     # Overall column header — link to cross-verifier overall table
     overall_col_id = f'{track_id}-overall'
     overall_cross_file = find_table_html(
         tables_dir, f'results-overall-{cross_prefix}', prefer_multi=True)
     if overall_cross_file:
         html.append(
-            f'<th data-col-id="{overall_col_id}">'
+            f'<th data-col-id="{overall_col_id}"{span}>'
             f'<a href="{overall_cross_file}">Overall</a></th>')
     else:
-        html.append(f'<th data-col-id="{overall_col_id}">Overall</th>')
+        html.append(f'<th data-col-id="{overall_col_id}"{span}>Overall</th>')
     html.append('</tr>')
+
+    # Sub-column headers: the expected verdict of the benchmarks counted
+    if len(parts) > 1:
+        html.append('<tr><td></td>')
+        for _ in list(categories) + ['overall']:
+            html.extend(f'<th>{label}</th>' for _, label in parts)
+        html.append('</tr>')
 
     # Sub-header row explaining columns
     html.append('<tr><td></td>')
-    for _ in categories:
-        html.append('<td style="font-size:0.8em;color:#666">score&nbsp;/&nbsp;correct&nbsp;/&nbsp;wrong&nbsp;/&nbsp;total</td>')
-    html.append('<td style="font-size:0.8em;color:#666">score&nbsp;/&nbsp;correct&nbsp;/&nbsp;wrong&nbsp;/&nbsp;total</td>')
+    for _ in list(categories) + ['overall']:
+        html.extend('<td style="font-size:0.8em;color:#666">score&nbsp;/&nbsp;correct&nbsp;/&nbsp;wrong&nbsp;/&nbsp;total</td>'
+                    for _ in parts)
     html.append('</tr>')
 
     # Determine table name suffix for per-verifier links
@@ -333,29 +358,38 @@ def generate_grid(html, tools, categories, results_dir, tables_dir,
         for cat in categories:
             col_id = f'{track_id}-{cat}'
             if cat not in tool_cats:
-                html.append('<td class="no-data">-</td>')
+                html.extend('<td class="no-data">-</td>' for _ in parts)
                 continue
 
             xml_path = get_result_xml(results_dir, tool, cat, kind=kind)
-            counts = extract_counts(xml_path)
+            counts = extract_counts_by_verdict(xml_path)
             table_file = find_table_html(
                 tables_dir, f'results-{tool}{table_suffix}-{cat}',
                 prefer_multi=bool(kind))
 
-            html.append(_render_cell(counts, table_file, col_id, is_hc=is_hc))
+            html.extend(_render_cell(counts and counts[part], table_file, _part_id(col_id, part, parts),
+                                     is_hc=is_hc)
+                        for part, _ in parts)
 
         # Overall column
         overall_col_id = f'{track_id}-overall'
         overall_xml = get_overall_xml(results_dir, tool, kind=kind)
-        overall_counts = extract_counts(overall_xml)
+        overall_counts = extract_counts_by_verdict(overall_xml)
         overall_file = find_table_html(
             tables_dir, f'results-{tool}{table_suffix}-overall',
             prefer_multi=bool(kind))
-        html.append(_render_cell(overall_counts, overall_file, overall_col_id, is_hc=is_hc))
+        html.extend(_render_cell(overall_counts and overall_counts[part], overall_file,
+                                 _part_id(overall_col_id, part, parts), is_hc=is_hc)
+                    for part, _ in parts)
 
         html.append('</tr>')
 
     html.append('</table>')
+
+
+def _part_id(col_id, part, parts):
+    """The column ID of a sub-column; medals are ranked per sub-column."""
+    return col_id if len(parts) == 1 else f'{col_id}-{part}'
 
 
 def _render_cell(counts, table_file, col_id, is_hc=False):
@@ -441,6 +475,8 @@ tr.hors-concours td:first-child { font-weight: normal; }
     html.append(
         '<p>Each cell shows the <em>score</em> (bold) and '
         '<em>correct&nbsp;/&nbsp;wrong&nbsp;/&nbsp;total</em> task counts. '
+        'In the solver track, every column is split into the benchmarks whose expected verdict is '
+        '<em>SAT</em> and those whose expected verdict is <em>UNSAT</em>, ranked separately. '
         'Click a cell to view the detailed table. '
         'Category headers link to cross-verifier comparison tables.</p>')
 
