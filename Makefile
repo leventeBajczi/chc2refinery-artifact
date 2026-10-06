@@ -227,7 +227,7 @@ $(TOOLS_DIRECTORY)/refinery:
 	wget '$(REFINERY_JDK)' -O $@-build/jdk.tar.gz
 	tar xzf $@-build/jdk.tar.gz -C $@/jdk --strip-components=1
 	mkdir -p $@-build/chc2refinery && cd $@-build/chc2refinery && git init -q \
-		&& git fetch -q --depth 1 https://github.com/leventeBajczi/chc2refinery $(CHC2REFINERY_COMMIT) && git checkout -q FETCH_HEAD
+		&& git fetch -q --depth 1 git@github.com:leventeBajczi/chc2refinery $(CHC2REFINERY_COMMIT) && git checkout -q FETCH_HEAD
 	cd $@-build/chc2refinery && cp $(CHC2REFINERY_MODULES) $(abspath $@)/
 	python3 -m pip install --quiet --no-deps --target $@/python z3-solver==$(REFINERY_Z3)
 	cd $@-build/refinery && git init -q && git fetch -q --depth 1 https://github.com/graphs4value/refinery $(REFINERY_COMMIT) \
