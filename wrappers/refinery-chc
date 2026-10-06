@@ -11,8 +11,11 @@ each with a Refinery process of its own, and the first verdict stops the other:
 The first line of the output is the verdict (sat, unsat or unknown), followed by the witness.
 Options (e.g., --prove-unsat to run one mode only) are passed on to chc2refinery.py.
 
-This script, chc2refinery.py with its modules, the Refinery CLI (refinery-generator-cli/) and a
-JDK (jdk/) are installed side by side by `make tools/refinery`.
+With --unsat-alethe, the unsat answer is followed by an Alethe proof instead of the derivation (Z3's
+Python API, in python/, re-solves the derivation for exact values).
+
+This script, chc2refinery.py with its modules, the Refinery CLI (refinery-generator-cli/), a JDK
+(jdk/) and Z3's Python API (python/) are installed side by side by `make tools/refinery`.
 """
 import os
 import sys
@@ -35,6 +38,7 @@ def main(argv: list[str]) -> int:
     # raises the Z3 limits (Z3 must not give up before the run does) and gives every run its own
     # temporary directory, into which Z3 and OR-Tools unpack their native libraries.
     env = dict(os.environ, JAVA_HOME=JDK)
+    env['PYTHONPATH'] = os.pathsep.join(p for p in (os.path.join(HERE, 'python'), env.get('PYTHONPATH')) if p)
     env['JAVA_OPTS'] = f"{env.get('JAVA_OPTS', '')} -XX:MaxRAMPercentage=40".strip()
     command = [sys.executable, os.path.join(HERE, 'chc2refinery.py'), *argv, '--refinery', CLI]
     os.execve(sys.executable, command, env)

@@ -94,10 +94,14 @@ def build_participation_table(template_dir):
         stem = basename.replace('.xml.template', '')
 
         # Determine track
-        if stem.endswith('-validation'):
+        if stem.endswith('-proof-validation'):
+            track = 'proof-validator'
+        elif stem.endswith('-validation'):
             track = 'validator'
         elif stem.endswith('-model'):
             track = 'model'
+        elif stem.endswith('-proof'):
+            track = 'proof'
         else:
             track = 'solver'
 
@@ -106,7 +110,7 @@ def build_participation_table(template_dir):
 
         tool_attr = root.get('tool', stem)
         display = root.get('displayName', '')
-        if track == 'validator':
+        if track in ('validator', 'proof-validator'):
             version_cell = '-'
         else:
             version_cell = get_tool_version_cell(tool_attr, display)
@@ -151,7 +155,7 @@ def build_participation_table(template_dir):
     cats = sorted(all_categories)
 
     # Group entries by track
-    groups = {'solver': [], 'model': [], 'validator': []}
+    groups = {'solver': [], 'model': [], 'validator': [], 'proof': [], 'proof-validator': []}
     for entry in entries:
         groups[entry[2]].append(entry)
 
@@ -169,7 +173,7 @@ def build_participation_table(template_dir):
                     opts = categories[cat]
                     if opts:
                         display_opts = [o for o in opts
-                                        if '||MODELS-DIR||' not in o]
+                                        if '||MODELS-DIR||' not in o and '||PROOFS-DIR||' not in o]
                         cell = ' '.join(f'`{o}`' for o in display_opts) if display_opts else '✓'
                     else:
                         cell = '✓'
@@ -186,19 +190,23 @@ def build_participation_table(template_dir):
         sections.append(_build_table('Model Verifiers', groups['model']))
     if groups['validator']:
         sections.append(_build_table('Validators', groups['validator']))
+    if groups['proof']:
+        sections.append(_build_table('Proof Verifiers', groups['proof']))
+    if groups['proof-validator']:
+        sections.append(_build_table('Proof Validators', groups['proof-validator']))
 
     return '\n\n'.join(sections)
 
 
 def _tool_module_for(template_tool):
-    if template_tool == 'chc-model-validate':
-        return 'tooldefs.chc-model-validate'
+    if template_tool in ('chc-model-validate', 'chc-proof-validate'):
+        return f'tooldefs.{template_tool}'
     return f'tooldefs.{template_tool}'
 
 
 def _tool_directory_for(template_tool, display_name):
     tools_dir = os.path.join(os.getcwd(), 'tools')
-    if template_tool == 'chc-model-validate':
+    if template_tool in ('chc-model-validate', 'chc-proof-validate'):
         # Validation templates use displayName (z3/cvc5/princess) for the
         # concrete backend directory containing validate.sh.
         backend = (display_name or '').strip()

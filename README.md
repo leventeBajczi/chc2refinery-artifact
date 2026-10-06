@@ -20,8 +20,9 @@ The answer is `unknown` if neither mode decides (e.g., for unsupported features)
   patches, [`refinery.patch`](https://github.com/leventeBajczi/chc2refinery/blob/main/patches/refinery.patch)
   (fixes) and [`refinery-bv-fp.patch`](https://github.com/leventeBajczi/chc2refinery/blob/main/patches/refinery-bv-fp.patch)
   (bit-vector and floating-point attributes), built with Gradle (this needs network access to
-  Maven Central); chc2refinery at a fixed commit; and a JDK 25 to run on. The Z3 Python package
-  is not needed: the tool does not check its answers with Z3 (chc2refinery's `--check`).
+  Maven Central); chc2refinery at a fixed commit; a JDK 25 to run on; and Z3's Python package
+  (installed with pip into `tools/refinery/python`), which only the proofs of the proof track use.
+  The tool does not check its answers with Z3 (chc2refinery's `--check`).
 * [`wrappers/refinery-chc`](wrappers/refinery-chc) runs `chc2refinery.py` with the bundled
   Refinery; the first line of its output is the verdict, followed by the witness (the derivation,
   or the finite model). Options, e.g., `--prove-unsat` to run one mode only, are passed on.
@@ -42,6 +43,26 @@ The answer is `unknown` if neither mode decides (e.g., for unsupported features)
   Validators still have to reason about the recursive `h`: Z3 confirms simple models (parity) but
   answers `unknown` for others (`x < y` on Peano numbers), which `chc2refinery.py --check` proves
   with induction lemmas.
+* [`benchmark-defs/refinery-proof.xml.template`](benchmark-defs/refinery-proof.xml.template) adds a
+  **proof track**, in which only Refinery takes part: on the unsatisfiable benchmarks of LIA-Lin,
+  LIA and LRA-Lin, it runs `--prove-unsat --unsat-alethe`, which prints an
+  [Alethe](https://verit.gitlabpages.uliege.be/alethe/specification.pdf) proof after `unsat`.
+  Z3 re-solves the derivation over the original clauses for exact values; the proof instantiates
+  the clauses with them and evaluates their constraints with the simplification rules of Alethe
+  (see chc2refinery's README). Proofs cover clauses over Booleans, integers and reals; for others
+  (`mod`, `div` with a remainder, `to_real`), `unsat` comes without a proof, which counts as
+  unconfirmed.
+* [`benchmark-defs/carcara-proof-validation.xml.template`](benchmark-defs/carcara-proof-validation.xml.template)
+  checks the proofs with [Carcara](https://github.com/ufmg-smite/carcara) 1.1.0 (`make tools/carcara`
+  builds it with cargo), with [`tooldefs/chc-proof-validate.py`](tooldefs/chc-proof-validate.py):
+  `valid` confirms the answer and `invalid` refutes it. Its `validate.sh` takes the proof after the
+  `unsat` line of the log file, and prepares the benchmark with
+  [`tools/validator/prepare-proof-problem.py`](tools/validator/prepare-proof-problem.py), which keeps
+  the assertions as they are: `(set-logic HORN)` becomes `(set-logic ALL)`, since Carcara reads
+  numerals as reals in a logic whose name contains R but not I, and symbols that are not simple
+  symbols of SMT-LIB are quoted (hopv names predicates `f$unknown:23`, which Carcara splits at the
+  colon). Carcara runs with `--expand-let-bindings`, since the proofs are let-free.
+  An `unsat` counts in the proof track only with a valid proof (`validate.py`, as for models).
 
 ### Running only Refinery
 
@@ -60,12 +81,25 @@ make process-results                      # tables of all solvers, in generated/
 For the model track, also download the validators and validate Refinery's models:
 
 ```bash
-make download-validators                  # z3, cvc5 and princess
+make download-validators                  # z3, cvc5, princess and carcara
 make verification-refinery-model          # results/refinery-model.*: ADT-LIA, --prove-sat
 make process-models-refinery              # models/refinery-models -> the run's log files
 make cvc5-validate-refinery-models z3-validate-refinery-models princess-validate-refinery-models
 make process-results
 ```
+
+For the proof track, build Carcara and validate Refinery's proofs:
+
+```bash
+make tools/carcara                        # needs cargo and a C compiler
+make verification-refinery-proof          # results/refinery-proof.*: LIA-Lin, LIA, LRA-Lin, unsat only
+make process-proofs-refinery              # proofs/refinery-proofs -> the run's log files
+make carcara-validate-refinery-proofs
+make process-results                      # tables results-refinery-proof-*, and the proof track on the page
+```
+
+A `benchexec` checkout cloned before the proof track was added needs the new tool definition linked:
+`ln -sf ../../../tooldefs/chc-proof-validate.py benchexec/benchexec/tools/`.
 
 `make download-results-2026` extracts only the result files (45 MB of the 2 GB archive) with
 [`fetch-2026-results.py`](fetch-2026-results.py); `make download-results-2026-logfiles` also
@@ -84,10 +118,14 @@ Verifiers, model-producing verifiers, and validators are **auto-discovered** fro
 | `TOOL.xml.template`           | Plain verifier   | `eldarica.xml.template`          |
 | `TOOL-model.xml.template`     | Model-producing verifier   | `eldarica-model.xml.template`    |
 | `TOOL-validation.xml.template`| Validator        | `cvc5-validation.xml.template`   |
+| `TOOL-proof.xml.template`     | Proof-producing verifier | `refinery-proof.xml.template` |
+| `TOOL-proof-validation.xml.template` | Proof validator | `carcara-proof-validation.xml.template` |
 
 * **Plain verifiers** are executed once; they do not produce models and need no validation.
 * **Model verifiers** produce models that are validated by every discovered validator.
 * **Validators** are paired with every model verifier automatically (full cross-product).
+* **Proof verifiers** produce proofs of unsatisfiability, which every proof validator checks
+  (`make process-all-proofs validate-all-proofs`).
 
 To add a new verifier, do the following three things:
 

@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<!DOCTYPE benchmark PUBLIC "+//IDN sosy-lab.org//DTD BenchExec benchmark 1.9//EN" "https://www.sosy-lab.org/benchexec/benchmark-2.3.dtd">
+<benchmark tool="chc-proof-validate" displayName="carcara" timelimit="90 s" hardtimelimit="96 s" memlimit="7 GB" cpuCores="2">
+
+<rundefinition name="CHC-COMP2026_check-sat">
+    <requiredfiles>../||PROOFS-DIR||</requiredfiles>
+    <option name="../||PROOFS-DIR||"/>
+
+  <tasks name="LIA-Lin">
+    <includesfile>../chc-comp26-benchmarks/LIA-Lin.set</includesfile>
+    <propertyfile expectedverdict="false">../chc-comp26-benchmarks/properties/check-sat.prp</propertyfile>
+  </tasks>
+
+  <tasks name="LIA">
+    <includesfile>../chc-comp26-benchmarks/LIA.set</includesfile>
+    <propertyfile expectedverdict="false">../chc-comp26-benchmarks/properties/check-sat.prp</propertyfile>
+  </tasks>
+
+  <tasks name="LRA-Lin">
+    <includesfile>../chc-comp26-benchmarks/LRA-Lin.set</includesfile>
+    <propertyfile expectedverdict="false">../chc-comp26-benchmarks/properties/check-sat.prp</propertyfile>
+  </tasks>
+
+</rundefinition>
+
+</benchmark>

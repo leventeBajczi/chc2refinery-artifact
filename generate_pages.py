@@ -26,6 +26,7 @@ def parse_args():
     parser.add_argument('--output', default='results/pages/tables/index.html')
     parser.add_argument('--model-verifiers', nargs='*', default=[])
     parser.add_argument('--plain-verifiers', nargs='*', default=[])
+    parser.add_argument('--proof-verifiers', nargs='*', default=[])
     return parser.parse_args()
 
 
@@ -97,10 +98,14 @@ def discover_categories(results_dir):
     return sorted(categories)
 
 
-def get_tool_categories(results_dir, tool_basename, is_model=False):
-    """Get the set of categories a tool has results for."""
-    if is_model:
-        prefix = f'{tool_basename}-model.'
+# Validated results of the model and proof tracks, which validate.py writes (see the Makefile)
+VALIDATED = {'model': 'fixed', 'proof': 'proof-validated'}
+
+
+def get_tool_categories(results_dir, tool_basename, kind=''):
+    """Get the set of categories a tool has results for (kind: '', 'model' or 'proof')."""
+    if kind:
+        prefix = f'{tool_basename}-{kind}.'
     else:
         prefix = f'{tool_basename}.'
     pattern = f'{prefix}*results.CHC-COMP2026_check-sat.*.xml'
@@ -117,21 +122,21 @@ def get_tool_categories(results_dir, tool_basename, is_model=False):
     return categories
 
 
-def get_result_xml(results_dir, tool_basename, category, is_model=False):
+def get_result_xml(results_dir, tool_basename, category, kind=''):
     """Find the result XML for a tool + category."""
-    if is_model:
+    if kind:
         # Use fixed (validated) results if available
         fixed = os.path.join(
             results_dir,
-            f'{tool_basename}-fixed.results.CHC-COMP2026_check-sat.{category}.xml'
+            f'{tool_basename}-{VALIDATED[kind]}.results.CHC-COMP2026_check-sat.{category}.xml'
         )
         if os.path.exists(fixed):
             return fixed
-        # Fall back to raw model results
+        # Fall back to raw results
         return find_latest_xml(
             results_dir,
-            f'{tool_basename}-model.*results.CHC-COMP2026_check-sat.{category}.xml',
-            tool_prefix=f'{tool_basename}-model.'
+            f'{tool_basename}-{kind}.*results.CHC-COMP2026_check-sat.{category}.xml',
+            tool_prefix=f'{tool_basename}-{kind}.'
         )
     else:
         return find_latest_xml(
@@ -141,19 +146,19 @@ def get_result_xml(results_dir, tool_basename, category, is_model=False):
         )
 
 
-def get_overall_xml(results_dir, tool_basename, is_model=False):
+def get_overall_xml(results_dir, tool_basename, kind=''):
     """Find the overall (all categories) result XML for a tool."""
-    if is_model:
+    if kind:
         fixed = os.path.join(
             results_dir,
-            f'{tool_basename}-fixed.results.CHC-COMP2026_check-sat.xml'
+            f'{tool_basename}-{VALIDATED[kind]}.results.CHC-COMP2026_check-sat.xml'
         )
         if os.path.exists(fixed):
             return fixed
         return find_latest_xml(
             results_dir,
-            f'{tool_basename}-model.*results.CHC-COMP2026_check-sat.xml',
-            tool_prefix=f'{tool_basename}-model.'
+            f'{tool_basename}-{kind}.*results.CHC-COMP2026_check-sat.xml',
+            tool_prefix=f'{tool_basename}-{kind}.'
         )
     else:
         return find_latest_xml(
@@ -263,7 +268,7 @@ def cell_data_attrs(counts):
 
 
 def generate_grid(html, tools, categories, results_dir, tables_dir,
-                  is_model, cross_prefix, track_id, hc_tools=()):
+                  kind, cross_prefix, track_id, hc_tools=()):
     """Generate an HTML table grid for a track.
 
     track_id is a short unique string used to namespace column IDs so that
@@ -305,13 +310,13 @@ def generate_grid(html, tools, categories, results_dir, tables_dir,
     html.append('</tr>')
 
     # Determine table name suffix for per-verifier links
-    table_suffix = '-model' if is_model else ''
+    table_suffix = f'-{kind}' if kind else ''
 
     hc_info_escaped = HC_INFO.replace('"', '&quot;')
 
     # Tool rows
     for tool in sorted_tools:
-        tool_cats = get_tool_categories(results_dir, tool, is_model=is_model)
+        tool_cats = get_tool_categories(results_dir, tool, kind=kind)
         is_hc = tool in hc_tools
 
         if is_hc:
@@ -331,21 +336,21 @@ def generate_grid(html, tools, categories, results_dir, tables_dir,
                 html.append('<td class="no-data">-</td>')
                 continue
 
-            xml_path = get_result_xml(results_dir, tool, cat, is_model=is_model)
+            xml_path = get_result_xml(results_dir, tool, cat, kind=kind)
             counts = extract_counts(xml_path)
             table_file = find_table_html(
                 tables_dir, f'results-{tool}{table_suffix}-{cat}',
-                prefer_multi=is_model)
+                prefer_multi=bool(kind))
 
             html.append(_render_cell(counts, table_file, col_id, is_hc=is_hc))
 
         # Overall column
         overall_col_id = f'{track_id}-overall'
-        overall_xml = get_overall_xml(results_dir, tool, is_model=is_model)
+        overall_xml = get_overall_xml(results_dir, tool, kind=kind)
         overall_counts = extract_counts(overall_xml)
         overall_file = find_table_html(
             tables_dir, f'results-{tool}{table_suffix}-overall',
-            prefer_multi=is_model)
+            prefer_multi=bool(kind))
         html.append(_render_cell(overall_counts, overall_file, overall_col_id, is_hc=is_hc))
 
         html.append('</tr>')
@@ -378,6 +383,7 @@ def generate_html(args):
     tables_dir = args.tables_dir
     model_verifiers = args.model_verifiers
     plain_verifiers = args.plain_verifiers
+    proof_verifiers = args.proof_verifiers
 
     categories = discover_categories(results_dir)
     hc_tools = read_hors_concours()
@@ -456,15 +462,22 @@ tr.hors-concours td:first-child { font-weight: normal; }
     if plain_verifiers:
         html.append('<h2>Solver Track (check-sat)</h2>')
         generate_grid(html, plain_verifiers, categories, results_dir,
-                      tables_dir, is_model=False, cross_prefix='solver',
+                      tables_dir, kind='', cross_prefix='solver',
                       track_id='solver', hc_tools=hc_tools)
 
     # --- Model Track ---
     if model_verifiers:
         html.append('<h2>Model Track (check-sat with model generation)</h2>')
         generate_grid(html, model_verifiers, categories, results_dir,
-                      tables_dir, is_model=True, cross_prefix='model',
+                      tables_dir, kind='model', cross_prefix='model',
                       track_id='model', hc_tools=hc_tools)
+
+    # --- Proof Track ---
+    if proof_verifiers:
+        html.append('<h2>Proof Track (check-sat with proofs of unsatisfiability)</h2>')
+        generate_grid(html, proof_verifiers, categories, results_dir,
+                      tables_dir, kind='proof', cross_prefix='proof',
+                      track_id='proof', hc_tools=hc_tools)
 
     html.append(f'<script>{SCORING_JS}</script>')
     html.append('</body></html>')

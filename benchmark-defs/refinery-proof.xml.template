@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<!DOCTYPE benchmark PUBLIC "+//IDN sosy-lab.org//DTD BenchExec benchmark 1.9//EN" "https://www.sosy-lab.org/benchexec/benchmark-2.3.dtd">
+<benchmark tool="refinery" timelimit="30 min" hardtimelimit="30 min" memlimit="30 GB" cpuCores="8">
+
+    <!-- Only the counterexample search, whose unsat answers come with an Alethe proof (checked by Carcara,
+         carcara-proof-validation). Proofs cover clauses over Booleans, integers and reals, so Refinery
+         enters the arithmetic categories with unsatisfiable benchmarks. -->
+    <option>--prove-unsat</option>
+    <option>--unsat-alethe</option>
+
+<rundefinition name="CHC-COMP2026_check-sat">
+  <tasks name="LIA-Lin">
+    <includesfile>../chc-comp26-benchmarks/LIA-Lin.set</includesfile>
+    <propertyfile expectedverdict="false">../chc-comp26-benchmarks/properties/check-sat.prp</propertyfile>
+  </tasks>
+
+  <tasks name="LIA">
+    <includesfile>../chc-comp26-benchmarks/LIA.set</includesfile>
+    <propertyfile expectedverdict="false">../chc-comp26-benchmarks/properties/check-sat.prp</propertyfile>
+  </tasks>
+
+  <tasks name="LRA-Lin">
+    <includesfile>../chc-comp26-benchmarks/LRA-Lin.set</includesfile>
+    <propertyfile expectedverdict="false">../chc-comp26-benchmarks/properties/check-sat.prp</propertyfile>
+  </tasks>
+</rundefinition>
+
+</benchmark>

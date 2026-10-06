@@ -3,6 +3,7 @@
 
 TOOLS_DIRECTORY = tools
 MODELS_DIRECTORY = models
+PROOFS_DIRECTORY = proofs
 
 ############# Utils
 
@@ -18,11 +19,17 @@ get_latest = $(shell cd $(2) && ls -d $(1) | sort -V | tail -n 1)
 #   TOOL.xml.template              → Plain verifier (just run, no validation needed)
 #   TOOL-model.xml.template        → Model verifier (run + validate with all validators)
 #   TOOL-validation.xml.template   → Validator (validates model verifier outputs)
+#   TOOL-proof.xml.template        → Proof verifier (run + validate with all proof validators)
+#   TOOL-proof-validation.xml.template → Proof validator (validates proof verifier outputs)
 
 ALL_TEMPLATES := $(notdir $(wildcard benchmark-defs/*.xml.template))
 
+# Proof validators: templates with -proof-validation suffix
+PROOF_VALIDATOR_TEMPLATES := $(filter %-proof-validation.xml.template, $(ALL_TEMPLATES))
+PROOF_VALIDATORS := $(PROOF_VALIDATOR_TEMPLATES:-proof-validation.xml.template=)
+
 # Validators: templates with -validation suffix
-VALIDATOR_TEMPLATES := $(filter %-validation.xml.template, $(ALL_TEMPLATES))
+VALIDATOR_TEMPLATES := $(filter-out %-proof-validation.xml.template, $(filter %-validation.xml.template, $(ALL_TEMPLATES)))
 VALIDATORS := $(VALIDATOR_TEMPLATES:-validation.xml.template=)
 
 # All verifier templates (everything except validators)
@@ -32,8 +39,12 @@ VERIFIER_TEMPLATES := $(filter-out %-validation.xml.template, $(ALL_TEMPLATES))
 MODEL_TEMPLATES := $(filter %-model.xml.template, $(VERIFIER_TEMPLATES))
 MODEL_VERIFIERS := $(MODEL_TEMPLATES:-model.xml.template=)
 
-# Plain verifiers: verifier templates without -model suffix (just run)
-PLAIN_TEMPLATES := $(filter-out %-model.xml.template, $(VERIFIER_TEMPLATES))
+# Proof verifiers: verifier templates with -proof suffix (produce proofs of unsat, need validation)
+PROOF_TEMPLATES := $(filter %-proof.xml.template, $(VERIFIER_TEMPLATES))
+PROOF_VERIFIERS := $(PROOF_TEMPLATES:-proof.xml.template=)
+
+# Plain verifiers: verifier templates without -model or -proof suffix (just run)
+PLAIN_TEMPLATES := $(filter-out %-model.xml.template %-proof.xml.template, $(VERIFIER_TEMPLATES))
 PLAIN_VERIFIERS := $(PLAIN_TEMPLATES:.xml.template=)
 
 # All verifier basenames (template name without .xml.template)
@@ -44,6 +55,11 @@ VALIDATE_TARGETS := $(foreach val,$(VALIDATORS),\
     $(foreach ver,$(MODEL_VERIFIERS),\
         $(val)-validate-$(ver)-models))
 
+# Cross product of proof validators × proof verifiers
+VALIDATE_PROOF_TARGETS := $(foreach val,$(PROOF_VALIDATORS),\
+    $(foreach ver,$(PROOF_VERIFIERS),\
+        $(val)-validate-$(ver)-proofs))
+
 # Debug target to inspect auto-discovered values
 debug-discovery:
 	@echo "VALIDATORS:             $(VALIDATORS)"
@@ -51,6 +67,9 @@ debug-discovery:
 	@echo "PLAIN_VERIFIERS:        $(PLAIN_VERIFIERS)"
 	@echo "ALL_VERIFIER_BASENAMES: $(ALL_VERIFIER_BASENAMES)"
 	@echo "VALIDATE_TARGETS:       $(VALIDATE_TARGETS)"
+	@echo "PROOF_VALIDATORS:       $(PROOF_VALIDATORS)"
+	@echo "PROOF_VERIFIERS:        $(PROOF_VERIFIERS)"
+	@echo "VALIDATE_PROOF_TARGETS: $(VALIDATE_PROOF_TARGETS)"
 
 # Audit benchmark-defs templates: DTD validation, model verdicts, participation table
 debug-templates: benchexec
@@ -80,7 +99,8 @@ download-verifiers: \
 download-validators: \
 	$(TOOLS_DIRECTORY)/z3 \
 	$(TOOLS_DIRECTORY)/cvc5 \
-	$(TOOLS_DIRECTORY)/princess
+	$(TOOLS_DIRECTORY)/princess \
+	$(TOOLS_DIRECTORY)/carcara
 
 download-all: benchexec chc-comp26-benchmarks-full chc-comp26-benchmarks-test download-tools
 
@@ -193,9 +213,12 @@ $(TOOLS_DIRECTORY)/z4:
 # Refinery is built from source at a fixed commit with chc2refinery's two patches: refinery.patch (fixes)
 # and refinery-bv-fp.patch (bit-vector and floating-point attributes), and runs on a bundled JDK 25.
 # The wrapper wrappers/refinery-chc runs chc2refinery.py, whose first output line is the verdict.
-CHC2REFINERY_COMMIT = b9119d8606ad9e4b56ea4f6f92e99a5cec34b2da
+CHC2REFINERY_COMMIT = 1b406aa86c7fc3d9efa7483bc149b25c38ef74d7
 REFINERY_COMMIT = 2f5c545ac3bb1d3f799b9590602371ba834ea902
 REFINERY_JDK = https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.1%2B8/OpenJDK25U-jdk_x64_linux_hotspot_25.0.1_8.tar.gz
+# The modules of chc2refinery; Z3's Python API (in python/) re-solves counterexamples for Alethe proofs.
+CHC2REFINERY_MODULES = chc2refinery.py finite.py visualize.py validate.py counterexample.py alethe.py
+REFINERY_Z3 = 5.1.0.0
 
 $(TOOLS_DIRECTORY)/refinery:
 	mkdir -p $(TOOLS_DIRECTORY)
@@ -205,7 +228,8 @@ $(TOOLS_DIRECTORY)/refinery:
 	tar xzf $@-build/jdk.tar.gz -C $@/jdk --strip-components=1
 	mkdir -p $@-build/chc2refinery && cd $@-build/chc2refinery && git init -q \
 		&& git fetch -q --depth 1 https://github.com/leventeBajczi/chc2refinery $(CHC2REFINERY_COMMIT) && git checkout -q FETCH_HEAD
-	cp $@-build/chc2refinery/chc2refinery.py $@-build/chc2refinery/finite.py $@-build/chc2refinery/visualize.py $@/
+	cd $@-build/chc2refinery && cp $(CHC2REFINERY_MODULES) $(abspath $@)/
+	python3 -m pip install --quiet --no-deps --target $@/python z3-solver==$(REFINERY_Z3)
 	cd $@-build/refinery && git init -q && git fetch -q --depth 1 https://github.com/graphs4value/refinery $(REFINERY_COMMIT) \
 		&& git checkout -q FETCH_HEAD && git apply ../chc2refinery/patches/refinery.patch && git apply ../chc2refinery/patches/refinery-bv-fp.patch
 	cd $@-build/refinery && JAVA_HOME=$(abspath $@/jdk) ./gradlew --no-daemon :refinery-generator-cli:installDist
@@ -241,6 +265,27 @@ $(TOOLS_DIRECTORY)/cvc5:
 	cd $(TOOLS_DIRECTORY)/cvc5 && echo '#!/bin/bash\ntail -n +7 "$$1" | $$(dirname "$$0")/../validator/validate-model.py $$2 > validate.smt2 && $$(dirname "$$0")/bin/cvc5 validate.smt2' > validate.sh && chmod +x validate.sh
 	rm $(TOOLS_DIRECTORY)/cvc5.zip
 
+# Carcara (https://github.com/ufmg-smite/carcara), the checker of Alethe proofs, for the proof track. It is
+# built from source with cargo (and a C compiler, for GMP). validate.sh checks the proof after the verdict
+# line of a log file against the benchmark, prepared by validator/prepare-proof-problem.py.
+CARCARA_TAG = carcara-1.1.0
+
+$(TOOLS_DIRECTORY)/carcara:
+	mkdir -p $(TOOLS_DIRECTORY)
+	rm -rf $@ $@-build
+	git clone -q --depth 1 --branch $(CARCARA_TAG) https://github.com/ufmg-smite/carcara $@-build
+	cd $@-build && cargo build --release
+	mkdir -p $@ && cp $@-build/target/release/carcara $@-build/LICENSE $@/
+	printf '%s\n' '#!/bin/bash' \
+		'# validate.sh LOG BENCHMARK: check the Alethe proof that follows the "unsat" line of LOG with Carcara.' \
+		'here=$$(dirname "$$0"); work=$$(mktemp -d); trap "rm -rf $$work" EXIT' \
+		'sed -n "/^unsat$$/,\$$p" "$$1" | tail -n +2 > $$work/proof.alethe' \
+		'grep -q "^(step" $$work/proof.alethe || { echo "no proof"; exit 1; }' \
+		'python3 $$here/../validator/prepare-proof-problem.py "$$2" > $$work/problem.smt2' \
+		'$$here/carcara check --expand-let-bindings $$work/proof.alethe $$work/problem.smt2' > $@/validate.sh
+	chmod +x $@/validate.sh
+	rm -rf $@-build
+
 ############## Setup
 
 configured: ./benchmark-utils/check_configured.sh
@@ -266,14 +311,14 @@ setup-test:
 verify-all: $(addprefix verification-, $(ALL_VERIFIER_BASENAMES))
 
 # Generic verification rule for all verifier templates.
-# For model templates (e.g., eldarica-model), the -model suffix is stripped
-# to find the tool directory (e.g., tools/eldarica).
+# For model and proof templates (e.g., eldarica-model, refinery-proof), the -model or -proof suffix is
+# stripped to find the tool directory (e.g., tools/eldarica).
 verification-%: configured
 	cp benchmark-defs/$*.xml.template $*.xml
 	sed -i 's|../chc-comp26-benchmarks|chc-comp26-benchmarks|g' $*.xml
 	- $(BENCHMARK) --no-compress-results \
-		--tool-directory $(TOOLS_DIRECTORY)/$(patsubst %-model,%,$*) \
-		$(if $(filter 1,$(VCLOUD)),--vcloudAdditionalFiles $(TOOLS_DIRECTORY)/$(patsubst %-model,%,$*)) \
+		--tool-directory $(TOOLS_DIRECTORY)/$(patsubst %-proof,%,$(patsubst %-model,%,$*)) \
+		$(if $(filter 1,$(VCLOUD)),--vcloudAdditionalFiles $(TOOLS_DIRECTORY)/$(patsubst %-proof,%,$(patsubst %-model,%,$*))) \
 		$(BENCHMARK_PARAMS) $*.xml
 	rm $*.xml
 
@@ -285,6 +330,35 @@ process-models-%:
 	rm -rf $(MODELS_DIRECTORY)/$*-models
 	mkdir -p $(MODELS_DIRECTORY)
 	ln -s "../results/$(call get_latest, $*-model.*.logfiles, results)" $(MODELS_DIRECTORY)/$*-models
+
+############## Process Proofs
+
+process-all-proofs: $(addprefix process-proofs-, $(PROOF_VERIFIERS))
+
+process-proofs-%:
+	rm -rf $(PROOFS_DIRECTORY)/$*-proofs
+	mkdir -p $(PROOFS_DIRECTORY)
+	ln -s "../results/$(call get_latest, $*-proof.*.logfiles, results)" $(PROOFS_DIRECTORY)/$*-proofs
+
+############## Validate Proofs
+
+validate-all-proofs: $(VALIDATE_PROOF_TARGETS)
+
+# Generate proof validation rules for each (proof validator, proof verifier) pair
+define proof_validation_rule
+$(1)-validate-$(2)-proofs: configured
+	cp benchmark-defs/$(1)-proof-validation.xml.template $(1)-validate-$(2)-proofs.xml
+	sed -i 's@../||PROOFS-DIR||@$$(PROOFS_DIRECTORY)/$(2)-proofs/$$$${rundefinition_name}.$$$${taskdef_name}.log@g' $(1)-validate-$(2)-proofs.xml
+	sed -i 's|../chc-comp26-benchmarks|chc-comp26-benchmarks|g' $(1)-validate-$(2)-proofs.xml
+	- $$(BENCHMARK) --no-compress-results --tool-directory $$(TOOLS_DIRECTORY)/$(1) \
+		$$(if $$(filter 1,$$(VCLOUD)),--vcloudAdditionalFiles $$(TOOLS_DIRECTORY)/$(1) $$(TOOLS_DIRECTORY)/validator proofs/$(2)-proofs) \
+		$$(BENCHMARK_PARAMS) $(1)-validate-$(2)-proofs.xml
+	rm $(1)-validate-$(2)-proofs.xml
+endef
+
+$(foreach val,$(PROOF_VALIDATORS),\
+    $(foreach ver,$(PROOF_VERIFIERS),\
+        $(eval $(call proof_validation_rule,$(val),$(ver)))))
 
 ############## Validate Models
 
@@ -320,7 +394,7 @@ generate-statistics:
 		$(if $(wildcard chc-comp26-benchmarks/*.set),--benchmarks-dir chc-comp26-benchmarks)
 
 generate-tables: clean-tables relabel-verdicts model-verifier-tables plain-verifier-tables \
-	model-overall-tables plain-overall-tables cross-verifier-tables cross-verifier-overall-tables
+	model-overall-tables plain-overall-tables proof-verifier-tables cross-verifier-tables cross-verifier-overall-tables
 
 clean-tables:
 	@mkdir -p generated/tables
@@ -358,6 +432,35 @@ model-verifier-tables:
 				--name results-$${model_verifier}-model-$${category} \
 				--outputpath generated/tables \
 				"results/$${model_verifier}-fixed.results.CHC-COMP2026_check-sat.$${category}.xml" $$validator_args; \
+		done; \
+	done
+
+# Proof verifiers: an unsat answer counts only with a proof that a proof validator accepted (validate.py), per
+# category and overall. The validated results are -proof-validated (not -fixed: those are the model track's).
+proof-verifier-tables:
+	@for proof_verifier in $(PROOF_VERIFIERS); do \
+		categories=$$(ls results/$${proof_verifier}-proof.*results.CHC-COMP2026_check-sat.*.xml 2>/dev/null \
+			| sed 's/.*\.CHC-COMP2026_check-sat\.\(.*\)\.xml/\1/' | sort -u); \
+		for category in $$categories overall; do \
+			suffix=$$([ $$category = overall ] || echo ".$$category"); \
+			verifier_latest=$$(ls -d results/$${proof_verifier}-proof.*results.CHC-COMP2026_check-sat$${suffix}.xml 2>/dev/null | sort -V | tail -n 1); \
+			[ -n "$$verifier_latest" ] || continue; \
+			validator_args=""; \
+			for validator in $(PROOF_VALIDATORS); do \
+				val_latest=$$(ls -d results/$${validator}-validate-$${proof_verifier}-proofs.*results.CHC-COMP2026_check-sat$${suffix}.xml 2>/dev/null | sort -V | tail -n 1); \
+				[ -n "$$val_latest" ] && validator_args="$$validator_args $$val_latest"; \
+			done; \
+			if [ -z "$$validator_args" ]; then \
+				echo "WARNING: No proof validator results for $${proof_verifier} / $${category}, skipping"; \
+				continue; \
+			fi; \
+			echo "Generating table: $${proof_verifier} proofs / $${category}"; \
+			python3 ./validate.py -o "results/$${proof_verifier}-proof-validated.results.CHC-COMP2026_check-sat$${suffix}.xml" \
+				"$$verifier_latest" $$validator_args; \
+			./benchexec/bin/table-generator --no-diff \
+				--name results-$${proof_verifier}-proof-$${category} \
+				--outputpath generated/tables \
+				"results/$${proof_verifier}-proof-validated.results.CHC-COMP2026_check-sat$${suffix}.xml" $$validator_args; \
 		done; \
 	done
 
@@ -494,5 +597,6 @@ prepare-pages:
 		--tables-dir generated/pages/tables \
 		--output generated/pages/tables/index.html \
 		--model-verifiers $(MODEL_VERIFIERS) \
-		--plain-verifiers $(PLAIN_VERIFIERS)
+		--plain-verifiers $(PLAIN_VERIFIERS) \
+		--proof-verifiers $(PROOF_VERIFIERS)
 	@echo "Pages ready at generated/pages/"
