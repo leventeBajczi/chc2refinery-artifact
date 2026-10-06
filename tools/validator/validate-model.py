@@ -8,6 +8,12 @@ assert chc_file.endswith(".smt2")
 smt_file = chc_file[:-4] + "-validate.smt2"
 
 funs = {}
+# Models that need auxiliary declarations and definitions (e.g., the finite models of Refinery, whose
+# predicates are conditions on a recursive map from values to the states of a datatype): these
+# commands are kept, in their order, before the definitions of the predicates.
+AUXILIARY = ("declare-datatypes", "declare-datatype", "declare-sort", "define-sort", "define-fun",
+             "define-fun-rec", "define-funs-rec")
+model_cmds = []
 
 
 def define_funs(cmds, funs):
@@ -34,6 +40,11 @@ if True:
         # Eldarica
         case [("define-fun", *_), *_] as cmds:
             define_funs(cmds, funs)
+        # Auxiliary declarations first (Refinery)
+        case [(("declare-datatypes" | "declare-datatype" | "declare-sort" | "define-sort" | "define-fun-rec"
+                | "define-funs-rec"), *_), *_] as cmds:
+            define_funs(cmds, funs)
+            model_cmds = cmds
         # Z3
         case [cmds]:
             define_funs(cmds, funs)
@@ -41,6 +52,10 @@ if True:
 with open(chc_file, "r") as file:
     content = file.read()
     cmds = smtlib.parse_exprs(content)
+
+predicates = {cmd[1] for cmd in cmds if isinstance(cmd, tuple) and cmd[:1] == ("declare-fun",)}
+auxiliary = [cmd for cmd in model_cmds if isinstance(cmd, tuple) and cmd and cmd[0] in AUXILIARY
+             and not (cmd[0] == "define-fun" and cmd[1] in predicates)]
 
 defs = []
 clauses = []
@@ -54,6 +69,8 @@ for cmd in cmds:
             pass
 
         case ("declare-fun", name, *args):
+            defs += auxiliary       # once, before the first predicate
+            auxiliary = []
             defs.append(funs[name])
 
         case ("assert", phi):

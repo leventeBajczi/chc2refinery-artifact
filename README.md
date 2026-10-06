@@ -27,8 +27,21 @@ The answer is `unknown` if neither mode decides (e.g., for unsupported features)
   or the finite model). Options, e.g., `--prove-unsat` to run one mode only, are passed on.
   [`tooldefs/refinery.py`](tooldefs/refinery.py) is its BenchExec tool definition.
 * [`benchmark-defs/refinery.xml.template`](benchmark-defs/refinery.xml.template) enters all nine
-  categories of the solver track, with the competition's limits. Refinery does not enter the
-  model track.
+  categories of the solver track, with the competition's limits.
+* [`benchmark-defs/refinery-model.xml.template`](benchmark-defs/refinery-model.xml.template) enters
+  the model track in ADT-LIA only, with `--prove-sat`: only the finite-model search, whose `sat`
+  answers come with a model. That search refuses sorts other than datatypes and Booleans
+  (integers, reals, bit-vectors, arrays), so the other categories, including ADT-LIA-Arrays, would
+  only get refusals, and a `sat` from an exhausted counterexample search has no model.
+* A model of `--prove-sat` is a tree automaton: a datatype of states, the transition functions, a
+  recursive map `h` from values to states (`define-funs-rec`), and every predicate as a condition
+  on `h`. [`tools/validator/validate-model.py`](tools/validator/validate-model.py) used to keep
+  only the definitions of the predicates, so it now also keeps the auxiliary declarations and
+  definitions of a model that starts with them, in their order, before the predicates. The output
+  for the models of the other solvers (`(model ...)`, Eldarica's and Z3's formats) is unchanged.
+  Validators still have to reason about the recursive `h`: Z3 confirms simple models (parity) but
+  answers `unknown` for others (`x < y` on Peano numbers), which `chc2refinery.py --check` proves
+  with induction lemmas.
 
 ### Running only Refinery
 
@@ -42,6 +55,16 @@ make setup-benchmark                      # or: make setup-test
 source benchmark-utils/local_config.sh
 make verification-refinery                # results/refinery.*.results.CHC-COMP2026_check-sat.*.xml
 make process-results                      # tables of all solvers, in generated/
+```
+
+For the model track, also download the validators and validate Refinery's models:
+
+```bash
+make download-validators                  # z3, cvc5 and princess
+make verification-refinery-model          # results/refinery-model.*: ADT-LIA, --prove-sat
+make process-models-refinery              # models/refinery-models -> the run's log files
+make cvc5-validate-refinery-models z3-validate-refinery-models princess-validate-refinery-models
+make process-results
 ```
 
 `make download-results-2026` extracts only the result files (45 MB of the 2 GB archive) with
