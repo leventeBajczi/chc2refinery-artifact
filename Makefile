@@ -213,7 +213,7 @@ $(TOOLS_DIRECTORY)/z4:
 # Refinery is built from source at a fixed commit with chc2refinery's two patches: refinery.patch (fixes)
 # and refinery-bv-fp.patch (bit-vector and floating-point attributes), and runs on a bundled JDK 25.
 # The wrapper wrappers/refinery-chc runs chc2refinery.py, whose first output line is the verdict.
-CHC2REFINERY_COMMIT = 1b406aa86c7fc3d9efa7483bc149b25c38ef74d7
+CHC2REFINERY_COMMIT = 2356f5773b5eea7dc4216b60041e07d8aa06debd
 REFINERY_COMMIT = 2f5c545ac3bb1d3f799b9590602371ba834ea902
 REFINERY_JDK = https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.1%2B8/OpenJDK25U-jdk_x64_linux_hotspot_25.0.1_8.tar.gz
 # The modules of chc2refinery; Z3's Python API (in python/) re-solves counterexamples for Alethe proofs.
@@ -265,15 +265,18 @@ $(TOOLS_DIRECTORY)/cvc5:
 	cd $(TOOLS_DIRECTORY)/cvc5 && echo '#!/bin/bash\ntail -n +7 "$$1" | $$(dirname "$$0")/../validator/validate-model.py $$2 > validate.smt2 && $$(dirname "$$0")/bin/cvc5 validate.smt2' > validate.sh && chmod +x validate.sh
 	rm $(TOOLS_DIRECTORY)/cvc5.zip
 
-# Carcara (https://github.com/ufmg-smite/carcara), the checker of Alethe proofs, for the proof track. It is
-# built from source with cargo (and a C compiler, for GMP). validate.sh checks the proof after the verdict
-# line of a log file against the benchmark, prepared by validator/prepare-proof-problem.py.
-CARCARA_TAG = carcara-1.1.0
+# Carcara (https://github.com/ufmg-smite/carcara), the checker of Alethe proofs, for the proof track, at a
+# fixed commit of its main branch (2026-10-05). It is built from source with cargo (and a C compiler, for GMP).
+# validate.sh checks the proof after the verdict line of a log file against the benchmark, as it is (Carcara
+# expands its let bindings; Int/Real subtyping, as in the evaluation of Golem's Alethe proofs, lets it read
+# integer literals in real terms).
+CARCARA_COMMIT = 836d5a6a453d95e8c046af368436689ab5b0005f
 
 $(TOOLS_DIRECTORY)/carcara:
 	mkdir -p $(TOOLS_DIRECTORY)
 	rm -rf $@ $@-build
-	git clone -q --depth 1 --branch $(CARCARA_TAG) https://github.com/ufmg-smite/carcara $@-build
+	mkdir -p $@-build && cd $@-build && git init -q \
+		&& git fetch -q --depth 1 https://github.com/ufmg-smite/carcara $(CARCARA_COMMIT) && git checkout -q FETCH_HEAD
 	cd $@-build && cargo build --release
 	mkdir -p $@ && cp $@-build/target/release/carcara $@-build/LICENSE $@/
 	printf '%s\n' '#!/bin/bash' \
@@ -281,8 +284,7 @@ $(TOOLS_DIRECTORY)/carcara:
 		'here=$$(dirname "$$0"); work=$$(mktemp -d); trap "rm -rf $$work" EXIT' \
 		'sed -n "/^unsat$$/,\$$p" "$$1" | tail -n +2 > $$work/proof.alethe' \
 		'grep -q "^(step" $$work/proof.alethe || { echo "no proof"; exit 1; }' \
-		'python3 $$here/../validator/prepare-proof-problem.py "$$2" > $$work/problem.smt2' \
-		'$$here/carcara check --expand-let-bindings $$work/proof.alethe $$work/problem.smt2' > $@/validate.sh
+		'$$here/carcara check --expand-let-bindings --allow-int-real-subtyping $$work/proof.alethe "$$2"' > $@/validate.sh
 	chmod +x $@/validate.sh
 	rm -rf $@-build
 

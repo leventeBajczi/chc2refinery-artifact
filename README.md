@@ -49,19 +49,17 @@ The answer is `unknown` if neither mode decides (e.g., for unsupported features)
   [Alethe](https://verit.gitlabpages.uliege.be/alethe/specification.pdf) proof after `unsat`.
   Z3 re-solves the derivation over the original clauses for exact values; the proof instantiates
   the clauses with them and evaluates their constraints with the simplification rules of Alethe
-  (see chc2refinery's README). Proofs cover clauses over Booleans, integers and reals; for others
-  (`mod`, `div` with a remainder, `to_real`), `unsat` comes without a proof, which counts as
-  unconfirmed.
+  (see chc2refinery's README), in the current Alethe format. Proofs cover clauses over Booleans,
+  integers and reals, including `div` and `mod` by a positive divisor; for others (`mod` by a
+  negative divisor, `to_real`), `unsat` comes without a proof, which counts as unconfirmed.
 * [`benchmark-defs/carcara-proof-validation.xml.template`](benchmark-defs/carcara-proof-validation.xml.template)
-  checks the proofs with [Carcara](https://github.com/ufmg-smite/carcara) 1.1.0 (`make tools/carcara`
-  builds it with cargo), with [`tooldefs/chc-proof-validate.py`](tooldefs/chc-proof-validate.py):
-  `valid` confirms the answer and `invalid` refutes it. Its `validate.sh` takes the proof after the
-  `unsat` line of the log file, and prepares the benchmark with
-  [`tools/validator/prepare-proof-problem.py`](tools/validator/prepare-proof-problem.py), which keeps
-  the assertions as they are: `(set-logic HORN)` becomes `(set-logic ALL)`, since Carcara reads
-  numerals as reals in a logic whose name contains R but not I, and symbols that are not simple
-  symbols of SMT-LIB are quoted (hopv names predicates `f$unknown:23`, which Carcara splits at the
-  colon). Carcara runs with `--expand-let-bindings`, since the proofs are let-free.
+  checks the proofs with [Carcara](https://github.com/ufmg-smite/carcara) at commit `836d5a6` of its
+  main branch (2026-10-05; `make tools/carcara` builds it with cargo), with
+  [`tooldefs/chc-proof-validate.py`](tooldefs/chc-proof-validate.py): `valid` confirms the answer
+  and `invalid` refutes it. Its `validate.sh` takes the proof after the `unsat` line of the log
+  file and checks it against the benchmark as it is, with `--expand-let-bindings` (the proofs are
+  let-free) and `--allow-int-real-subtyping` (integer literals in real terms), the options of the
+  evaluation of Golem's Alethe proofs (Otoni et al., TACAS 2025).
   An `unsat` counts in the proof track only with a valid proof (`validate.py`, as for models).
 
 ### Running only Refinery
