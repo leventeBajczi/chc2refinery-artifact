@@ -124,7 +124,7 @@ def parse_exprs(text):
 
 def needs_quotes(sym):
     import re
-    return re.fullmatch(t_SYMBOL, sym) is None
+    return re.fullmatch(t_SYMBOL, sym) is None and re.fullmatch(t_KEYWORD, sym) is None
 
 
 def print_expr_non_recursive(expr):

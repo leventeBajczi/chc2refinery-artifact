@@ -213,7 +213,7 @@ $(TOOLS_DIRECTORY)/z4:
 # Refinery is built from source at a fixed commit with chc2refinery's two patches: refinery.patch (fixes)
 # and refinery-bv-fp.patch (bit-vector and floating-point attributes), and runs on a bundled JDK 25.
 # The wrapper wrappers/refinery-chc runs chc2refinery.py, whose first output line is the verdict.
-CHC2REFINERY_COMMIT = 2356f5773b5eea7dc4216b60041e07d8aa06debd
+CHC2REFINERY_COMMIT = 61f3a0c6e27a41ec380731dc87867088a817e738
 REFINERY_COMMIT = 2f5c545ac3bb1d3f799b9590602371ba834ea902
 REFINERY_JDK = https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.1%2B8/OpenJDK25U-jdk_x64_linux_hotspot_25.0.1_8.tar.gz
 # The modules of chc2refinery; Z3's Python API (in python/) re-solves counterexamples for Alethe proofs.
@@ -240,13 +240,15 @@ $(TOOLS_DIRECTORY)/refinery:
 	rm -rf $@-build
 
 ### Below are the validators.
+# Their validate.sh runs tools/validator/check-model.sh with the solver: it builds the query of
+# validate-model.py, and checks a model with recursive definitions (Refinery's) first with their equations.
 
 $(TOOLS_DIRECTORY)/princess:
 	mkdir -p $(TOOLS_DIRECTORY)
 	rm -rf $@
 	wget https://github.com/uuverifiers/princess/releases/download/snapshot-2025-11-17/princess-bin-2025-11-17.zip -O $(TOOLS_DIRECTORY)/princess.zip
 	cd $(TOOLS_DIRECTORY) && unzip princess.zip && mv princess-bin-2025-11-17 princess
-	cd $(TOOLS_DIRECTORY)/princess && echo '#!/bin/bash\ntail -n +7 "$$1" | $$(dirname "$$0")/../validator/validate-model.py $$2 > validate.smt2 && $$(dirname "$$0")/princess validate.smt2' > validate.sh && chmod +x validate.sh
+	cd $(TOOLS_DIRECTORY)/princess && echo '#!/bin/bash\nexec $$(dirname "$$0")/../validator/check-model.sh "$$1" "$$2" $$(dirname "$$0")/princess' > validate.sh && chmod +x validate.sh
 	rm $(TOOLS_DIRECTORY)/princess.zip
 
 $(TOOLS_DIRECTORY)/z3:
@@ -254,7 +256,7 @@ $(TOOLS_DIRECTORY)/z3:
 	rm -rf $@
 	wget https://github.com/Z3Prover/z3/releases/download/z3-4.16.0/z3-4.16.0-x64-glibc-2.39.zip -O $(TOOLS_DIRECTORY)/z3.zip
 	cd $(TOOLS_DIRECTORY) && unzip z3.zip && mv z3-4.16.0-x64-glibc-2.39 z3
-	cd $(TOOLS_DIRECTORY)/z3 && echo '#!/bin/bash\ntail -n +7 "$$1" | $$(dirname "$$0")/../validator/validate-model.py $$2 > validate.smt2 && $$(dirname "$$0")/bin/z3 validate.smt2' > validate.sh && chmod +x validate.sh
+	cd $(TOOLS_DIRECTORY)/z3 && echo '#!/bin/bash\nexec $$(dirname "$$0")/../validator/check-model.sh "$$1" "$$2" --memory 4000000 $$(dirname "$$0")/bin/z3' > validate.sh && chmod +x validate.sh
 	rm $(TOOLS_DIRECTORY)/z3.zip
 
 $(TOOLS_DIRECTORY)/cvc5:
@@ -262,14 +264,15 @@ $(TOOLS_DIRECTORY)/cvc5:
 	rm -rf $@
 	wget https://github.com/cvc5/cvc5/releases/download/cvc5-1.3.3/cvc5-Linux-x86_64-libcxx-static.zip -O $(TOOLS_DIRECTORY)/cvc5.zip
 	cd $(TOOLS_DIRECTORY) && unzip cvc5.zip && mv cvc5-Linux-x86_64-libcxx-static cvc5
-	cd $(TOOLS_DIRECTORY)/cvc5 && echo '#!/bin/bash\ntail -n +7 "$$1" | $$(dirname "$$0")/../validator/validate-model.py $$2 > validate.smt2 && $$(dirname "$$0")/bin/cvc5 validate.smt2' > validate.sh && chmod +x validate.sh
+	cd $(TOOLS_DIRECTORY)/cvc5 && echo '#!/bin/bash\nexec $$(dirname "$$0")/../validator/check-model.sh "$$1" "$$2" --memory 4000000 $$(dirname "$$0")/bin/cvc5' > validate.sh && chmod +x validate.sh
 	rm $(TOOLS_DIRECTORY)/cvc5.zip
 
 # Carcara (https://github.com/ufmg-smite/carcara), the checker of Alethe proofs, for the proof track, at a
 # fixed commit of its main branch (2026-10-05). It is built from source with cargo (and a C compiler, for GMP).
 # validate.sh checks the proof after the verdict line of a log file against the benchmark, as it is (Carcara
 # expands its let bindings; Int/Real subtyping, as in the evaluation of Golem's Alethe proofs, lets it read
-# integer literals in real terms).
+# integer literals in real terms). A log file that BenchExec cut has no complete proof, which leaves the
+# answer unconfirmed (not refuted).
 CARCARA_COMMIT = 836d5a6a453d95e8c046af368436689ab5b0005f
 
 $(TOOLS_DIRECTORY)/carcara:
@@ -282,6 +285,7 @@ $(TOOLS_DIRECTORY)/carcara:
 	printf '%s\n' '#!/bin/bash' \
 		'# validate.sh LOG BENCHMARK: check the Alethe proof that follows the "unsat" line of LOG with Carcara.' \
 		'here=$$(dirname "$$0"); work=$$(mktemp -d); trap "rm -rf $$work" EXIT' \
+		'grep -q "^WARNING: YOUR LOGFILE WAS TOO LONG" "$$1" && { echo "truncated log"; exit 1; }' \
 		'sed -n "/^unsat$$/,\$$p" "$$1" | tail -n +2 > $$work/proof.alethe' \
 		'grep -q "^(step" $$work/proof.alethe || { echo "no proof"; exit 1; }' \
 		'$$here/carcara check --expand-let-bindings --allow-int-real-subtyping $$work/proof.alethe "$$2"' > $@/validate.sh
@@ -315,11 +319,14 @@ verify-all: $(addprefix verification-, $(ALL_VERIFIER_BASENAMES))
 # Generic verification rule for all verifier templates.
 # For model and proof templates (e.g., eldarica-model, refinery-proof), the -model or -proof suffix is
 # stripped to find the tool directory (e.g., tools/eldarica).
+# The log files of model and proof runs hold the witnesses, so they are kept whole up to 1 GB: by default,
+# BenchExec cuts the middle out of a log file over 20 MB, and the validators then reject the witness.
 verification-%: configured
 	cp benchmark-defs/$*.xml.template $*.xml
 	sed -i 's|../chc-comp26-benchmarks|chc-comp26-benchmarks|g' $*.xml
 	- $(BENCHMARK) --no-compress-results \
 		--tool-directory $(TOOLS_DIRECTORY)/$(patsubst %-proof,%,$(patsubst %-model,%,$*)) \
+		$(if $(filter %-model %-proof,$*),--maxLogfileSize 1GB) \
 		$(if $(filter 1,$(VCLOUD)),--vcloudAdditionalFiles $(TOOLS_DIRECTORY)/$(patsubst %-proof,%,$(patsubst %-model,%,$*))) \
 		$(BENCHMARK_PARAMS) $*.xml
 	rm $*.xml

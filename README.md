@@ -40,18 +40,34 @@ The answer is `unknown` if neither mode decides (e.g., for unsupported features)
   only the definitions of the predicates, so it now also keeps the auxiliary declarations and
   definitions of a model that starts with them, in their order, before the predicates. The output
   for the models of the other solvers (`(model ...)`, Eldarica's and Z3's formats) is unchanged.
-  Validators still have to reason about the recursive `h`: Z3 confirms simple models (parity) but
-  answers `unknown` for others (`x < y` on Peano numbers), which `chc2refinery.py --check` proves
-  with induction lemmas.
+* The `validate.sh` of each model validator runs
+  [`tools/validator/check-model.sh`](tools/validator/check-model.sh) with its solver. With the
+  recursive definition of `h`, the solvers unfold it to a bounded depth only, and time out on
+  clauses that hold whatever state `h` gives to a variable. So a model with recursive definitions
+  is first checked, for at most 45 s, with the definitions as their equations, asserted for all
+  arguments with the applications as patterns (`validate-model.py --equations`; SMT-LIB 2.6
+  defines the meaning of `define-funs-rec` so), from which the solvers instantiate `h` at the
+  terms of the clauses. Only `unsat` counts from this check, which runs within 4 GB of virtual
+  memory for Z3 and cvc5 (Princess limits its heap itself); otherwise, the model is checked as it
+  is. Checked again with the same solvers and 90 s, the 33 models of the run of 2026-10-06 (with
+  the model of the current chc2refinery for `1-bmc-test-bmc-diamond-1-true.Z3.0_000`, 20 KB, where
+  BenchExec had cut one of 21 MB), this confirms 26 models
+  instead of 21 (Z3 26 instead of 12, Princess 20 instead of 5, cvc5 18 instead of 19): all models
+  of the Cartesian encoding. The 7 models of the synchronous encoding (a predicate on the
+  convolution of its arguments, e.g., `x <= y` on Peano numbers) need induction (that `h(x, x)` is
+  a diagonal state for every `x`), which no validator does; `chc2refinery.py --check` proves them
+  with induction lemmas. Models without recursive definitions (those of the other solvers) are
+  checked as before. A log file that BenchExec cut makes `validate-model.py` stop with an error.
 * [`benchmark-defs/refinery-proof.xml.template`](benchmark-defs/refinery-proof.xml.template) adds a
   **proof track**, in which only Refinery takes part: on the unsatisfiable benchmarks of LIA-Lin,
   LIA and LRA-Lin, it runs `--prove-unsat --unsat-alethe`, which prints an
   [Alethe](https://verit.gitlabpages.uliege.be/alethe/specification.pdf) proof after `unsat`.
   Z3 re-solves the derivation over the original clauses for exact values; the proof instantiates
-  the clauses with them and evaluates their constraints with the simplification rules of Alethe
-  (see chc2refinery's README), in the current Alethe format. Proofs cover clauses over Booleans,
-  integers and reals, including `div` and `mod` by a positive divisor; for others (`mod` by a
-  negative divisor, `to_real`), `unsat` comes without a proof, which counts as unconfirmed.
+  the clauses with them and evaluates their constraints with Carcara's `evaluate` rule (see
+  chc2refinery's README), in the current Alethe format, and writes a term that occurs more than
+  once only once (named by `:named`), so a proof grows linearly with its clause instances. Proofs
+  cover clauses over Booleans, integers and reals, with the operators of these categories (`div`,
+  `mod` and `to_real` among them); an `unsat` without a proof counts as unconfirmed.
 * [`benchmark-defs/carcara-proof-validation.xml.template`](benchmark-defs/carcara-proof-validation.xml.template)
   checks the proofs with [Carcara](https://github.com/ufmg-smite/carcara) at commit `836d5a6` of its
   main branch (2026-10-05; `make tools/carcara` builds it with cargo), with
@@ -59,8 +75,13 @@ The answer is `unknown` if neither mode decides (e.g., for unsupported features)
   and `invalid` refutes it. Its `validate.sh` takes the proof after the `unsat` line of the log
   file and checks it against the benchmark as it is, with `--expand-let-bindings` (the proofs are
   let-free) and `--allow-int-real-subtyping` (integer literals in real terms), the options of the
-  evaluation of Golem's Alethe proofs (Otoni et al., TACAS 2025).
+  evaluation of Golem's Alethe proofs (Otoni et al., TACAS 2025). A log file that BenchExec cut
+  gives `truncated log`, which leaves the answer unconfirmed rather than refuted.
   An `unsat` counts in the proof track only with a valid proof (`validate.py`, as for models).
+* Model and proof runs keep their log files whole up to 1 GB (`--maxLogfileSize`): by default,
+  BenchExec cuts the middle out of a log file over 20 MB, which, in the run of 2026-10-06, cut
+  the proofs of 7 `LRA-Lin` benchmarks (up to 151 MB, before the proofs named their repeated
+  terms) and one model of 21 MB.
 
 ### Running only Refinery
 
@@ -85,6 +106,9 @@ make process-models-refinery              # models/refinery-models -> the run's 
 make cvc5-validate-refinery-models z3-validate-refinery-models princess-validate-refinery-models
 make process-results
 ```
+
+Validators downloaded before `check-model.sh` was added need their `validate.sh` written again:
+`make -B tools/z3 tools/cvc5 tools/princess`.
 
 For the proof track, build Carcara and validate Refinery's proofs:
 
