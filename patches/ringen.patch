@@ -1,0 +1,13 @@
+diff --git a/Programs.fs b/Programs.fs
+index ca40df1..690a6b8 100644
+--- a/Programs.fs
++++ b/Programs.fs
+@@ -67,7 +67,7 @@ type ProgramRunner () =
+         let arguments = x.BinaryOptions filename
+         let statisticsFile = Path.GetTempFileName()
+         File.Delete(statisticsFile)
+-        psinfo.FileName <- "/usr/bin/time"
++        psinfo.FileName <- Option.defaultValue "/usr/bin/time" (Option.ofObj (Environment.GetEnvironmentVariable("RINGEN_TIME")))
+         psinfo.Arguments <- $"--output=%s{statisticsFile} --format=%%M,%%e %s{executable} %s{arguments}"
+         print_verbose $"Run: %s{psinfo.FileName} %s{psinfo.Arguments}"
+         psinfo.WorkingDirectory <- x.WorkingDirectory filename

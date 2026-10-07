@@ -94,7 +94,8 @@ download-verifiers: \
 	$(TOOLS_DIRECTORY)/theta \
 	$(TOOLS_DIRECTORY)/loat \
 	$(TOOLS_DIRECTORY)/z4 \
-	$(TOOLS_DIRECTORY)/refinery
+	$(TOOLS_DIRECTORY)/refinery \
+	$(TOOLS_DIRECTORY)/ringen
 
 download-validators: \
 	$(TOOLS_DIRECTORY)/z3 \
@@ -237,6 +238,36 @@ $(TOOLS_DIRECTORY)/refinery:
 	cp -r $@-build/refinery/LICENSE $@-build/refinery/LICENSES $@/
 	cp wrappers/refinery-chc $@/ && chmod +x $@/refinery-chc
 	echo "chc2refinery $(CHC2REFINERY_COMMIT), Refinery $(REFINERY_COMMIT) with refinery.patch and refinery-bv-fp.patch" > $@/VERSION
+	rm -rf $@-build
+
+# RInGen (https://github.com/Columpio/RInGen), the regular invariant generator for CHCs over algebraic
+# datatypes, as it entered CHC-COMP 2022 (winner of ADT-nonlin), hors concours. It rewrites the clauses into
+# a formula over uninterpreted functions (integers become Peano numbers), which the CHC-COMP fork of Vampire
+# (https://github.com/Columpio/vampire, --mode chccomp) decides. RInGen is built self-contained with the
+# .NET 6 SDK (so no .NET is needed to run it), with patches/ringen.patch: RInGen runs its backend with
+# /usr/bin/time (GNU time), which the patch lets the wrapper replace (wrappers/ringen-time).
+# The wrapper wrappers/ringen-chc runs RInGen with the options of its CHC-COMP 2022 entry, on problems without
+# integers only (it answers unknown on the others, on which RInGen's Peano numbers can give wrong answers).
+RINGEN_COMMIT = 058fe6e446489b73e7097e95bc55b984113219d1
+RINGEN_VAMPIRE_COMMIT = 4d2b7f427268470aba104e3dbff0003cc6b9b873
+
+$(TOOLS_DIRECTORY)/ringen:
+	mkdir -p $(TOOLS_DIRECTORY)
+	rm -rf $@ $@-build
+	mkdir -p $@ $@-build/ringen $@-build/vampire
+	cd $@-build/ringen && git init -q && git fetch -q --depth 1 https://github.com/Columpio/RInGen $(RINGEN_COMMIT) \
+		&& git checkout -q FETCH_HEAD && git submodule update -q --init --depth 1 && git apply $(abspath patches/ringen.patch)
+	wget https://dot.net/v1/dotnet-install.sh -O $@-build/dotnet-install.sh
+	bash $@-build/dotnet-install.sh --channel 6.0 --install-dir $(abspath $@-build/dotnet)
+	cd $@-build/ringen && DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_ROOT=$(abspath $@-build/dotnet) $(abspath $@-build/dotnet)/dotnet \
+		publish -c Release -r linux-x64 --self-contained true -p:PublishReadyToRun=true RInGen.fsproj
+	cp -r $@-build/ringen/bin/Release/net6.0/linux-x64/publish $@/publish
+	cd $@-build/vampire && git init -q && git fetch -q --depth 1 https://github.com/Columpio/vampire $(RINGEN_VAMPIRE_COMMIT) \
+		&& git checkout -q FETCH_HEAD && mkdir build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release && $(MAKE) -j$$(nproc)
+	cp $@-build/vampire/build/bin/vampire* $@/vampire
+	cp $@-build/vampire/LICENCE $@/LICENCE.vampire
+	cp wrappers/ringen-chc $@/ && cp wrappers/ringen-time $@/time && chmod +x $@/ringen-chc $@/time
+	echo "RInGen $(RINGEN_COMMIT) with ringen.patch, Vampire (Columpio fork) $(RINGEN_VAMPIRE_COMMIT)" > $@/VERSION
 	rm -rf $@-build
 
 ### Below are the validators.

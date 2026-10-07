@@ -2,8 +2,8 @@
 
 ## Refinery
 
-This fork adds one solver to the CHC-COMP 2026 setup: the [Refinery](https://refinery.tools/)
-graph solver, driven by [chc2refinery](https://github.com/leventeBajczi/chc2refinery), a single
+This fork adds one solver to the CHC-COMP 2026 setup (and RInGen hors concours, for comparison, see
+[below](#ringen-hors-concours)): the [Refinery](https://refinery.tools/) graph solver, driven by [chc2refinery](https://github.com/leventeBajczi/chc2refinery), a single
 command that proves CHC problems with Refinery in two modes, which run in parallel (the first
 verdict stops the other):
 
@@ -129,6 +129,49 @@ extracts the run logs (5.6 GB), which the result pages link to. Without the 2026
 `make process-results` generates tables of Refinery alone. Expected verdicts are read from the
 benchmark `.yml` files (`RELABEL_BY_MAJORITY_VOTE = False` in `configs.py`), so no other solver is
 needed to score Refinery's answers.
+
+## RInGen (hors concours)
+
+[RInGen](https://github.com/Columpio/RInGen), the regular invariant generator for CHCs over algebraic
+datatypes, takes part hors concours (`hors_concours.txt`), in `ADT-LIA`, for comparison with
+Refinery's finite models. It entered CHC-COMP 2022 (v1.2, winner of ADT-nonlin, the pure-datatype
+track that CHC-COMP 2026 no longer has) and no later edition, so it has no published 2026 results.
+
+* RInGen rewrites the clauses into a formula over uninterpreted functions: datatypes become free
+  sorts and constructors free functions, and integers become Peano numbers. The CHC-COMP fork of
+  [Vampire](https://github.com/Columpio/vampire) (`--mode chccomp`) then searches for a refutation or a
+  saturation (a finite model), which gives `unsat` or `sat`.
+* [`wrappers/ringen-chc`](wrappers/ringen-chc) runs the command of RInGen's CHC-COMP 2022 entry,
+  `RInGen --timelimit T -q -o DIR/ solve -s vampire --path INPUT -t`, with the run's CPU time limit
+  as `T` (passed by [`tooldefs/ringen.py`](tooldefs/ringen.py); RInGen's own default is 300 s). Its
+  output is the verdict. The entry also passed `--no-isolation`, which the RInGen used here (the last
+  commit of its master branch, `058fe6e`, July 2022, later than the v1.2 of the competition) no
+  longer has: it runs the transformation in a process of its own only with `--sync-terms`.
+* `make tools/ringen` builds RInGen and Vampire from source at fixed commits: RInGen self-contained
+  with the .NET 6 SDK (fetched by `dotnet-install.sh`; no .NET is needed to run it), and Vampire with
+  CMake (without Z3). RInGen runs its backend under `/usr/bin/time` (GNU time) to measure it, which
+  not every machine has; [`patches/ringen.patch`](patches/ringen.patch) lets the wrapper put
+  [`wrappers/ringen-time`](wrappers/ringen-time) in its place.
+* **Only problems without integers.** RInGen replaces integers by Peano numbers, which loses negative
+  values and subtraction below zero, so its answers on problems with integers can be wrong. Its 2022
+  track had no integers, and the wrapper answers `unknown`, without running RInGen, on a problem that
+  uses the sort `Int` (576 of the 1131 `ADT-LIA` benchmarks do not). `ADT-LIA-Arrays` is not entered:
+  all of its benchmarks use integers, and RInGen failed on every one that we tried.
+
+On a sample of 120 benchmarks with known verdicts (seed 2026, 60 s each, without the integer filter,
+3 runs at a time on 4 cores of a 2.8 GHz Xeon), RInGen
+answered 30 of the 50 `ADT-LIA` benchmarks without integers correctly (10 of 25 sat, 20 of 25 unsat;
+median 0.8 s, at most 22 s) and none wrongly. Of the 50 with integers it answered 5 correctly and 1
+wrongly (`tip-adt-lia/false_graph_btp5`, unsat, answered sat), which the wrapper now leaves unknown.
+It answered none of the 20 `ADT-LIA-Arrays` benchmarks (all failed within 1 s).
+
+```bash
+make tools/ringen                         # needs git, wget, CMake, a C++ compiler and network access
+make verification-ringen                  # results/ringen.*: ADT-LIA
+```
+
+A `benchexec` checkout cloned before RInGen was added needs its tool definition linked:
+`ln -sf ../../../tooldefs/ringen.py benchexec/benchexec/tools/`.
 
 ## Adding / Editing Solvers
 

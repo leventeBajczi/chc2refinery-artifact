@@ -68,6 +68,7 @@ SOLVER_DISPLAY = {
     "mucyc":        "muCYC",
     "pcsat":        "PCSat",
     "refinery":     "Refinery",
+    "ringen":       "RInGen",
     "spacer":       "Spacer",
     "theta":        "Theta",
     "z4":           "Z4",
@@ -83,6 +84,7 @@ SOLVER_LATEX_MACROS = {
     "mucyc":        "Mucyc",
     "pcsat":        "Pcsat",
     "refinery":     "Refinery",
+    "ringen":       "Ringen",
     "spacer":       "Spacer",
     "theta":        "Theta",
     "z4":           "ZFour",  # LaTeX command names may not contain digits
@@ -101,6 +103,7 @@ SOLVER_COLORS = {
     "mucyc":        "#9467bd",
     "pcsat":        "#8c564b",
     "refinery":     "#17becf",
+    "ringen":       "#c5b0d5",
     "spacer":       "#e377c2",
     "theta":        "#7f7f7f",
     "z4":           "#bcbd22",
