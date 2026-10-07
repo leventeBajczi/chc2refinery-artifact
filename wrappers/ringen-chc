@@ -16,14 +16,12 @@ RInGen and Vampire.
 
 RInGen replaces integers by Peano numbers, so negative values and subtraction below zero are lost,
 and its answers on problems with integers can be wrong (e.g., sat for the unsat
-tip-adt-lia/false_graph_btp5). RInGen's CHC-COMP 2022 track (ADT-nonlin) had no integers: on a
-problem that uses the sort Int, this answers unknown without running RInGen.
+tip-adt-lia/false_graph_btp5). Its answers are passed on as they are.
 
 RInGen (publish/, self-contained, with patches/ringen.patch), Vampire (vampire), a stand-in for GNU
 time (time) and this script are installed side by side by `make tools/ringen`.
 """
 import os
-import re
 import subprocess
 import sys
 import tempfile
@@ -42,11 +40,6 @@ def main(argv: list[str]) -> int:
     if len(argv) != 1:
         print(f'usage: {sys.argv[0]} [--timelimit=SECONDS] INPUT.smt2', file=sys.stderr)
         return 2
-    with open(argv[0]) as f:
-        symbols = set(re.split(r'[\s()]+', re.sub(r';[^\n]*', '', f.read())))
-    if 'Int' in symbols:
-        print('unknown\n; integers are outside the scope of RInGen (Peano numbers)')
-        return 0
     with tempfile.TemporaryDirectory(prefix='ringen-') as work:
         # RInGen wants full paths; its auxiliary files (the rewritten clauses, the statistics of the
         # backend run) go to the temporary directory, which is removed afterwards.

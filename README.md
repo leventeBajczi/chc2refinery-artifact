@@ -152,18 +152,16 @@ track that CHC-COMP 2026 no longer has) and no later edition, so it has no publi
   CMake (without Z3). RInGen runs its backend under `/usr/bin/time` (GNU time) to measure it, which
   not every machine has; [`patches/ringen.patch`](patches/ringen.patch) lets the wrapper put
   [`wrappers/ringen-time`](wrappers/ringen-time) in its place.
-* **Only problems without integers.** RInGen replaces integers by Peano numbers, which loses negative
-  values and subtraction below zero, so its answers on problems with integers can be wrong. Its 2022
-  track had no integers, and the wrapper answers `unknown`, without running RInGen, on a problem that
-  uses the sort `Int` (576 of the 1131 `ADT-LIA` benchmarks do not). `ADT-LIA-Arrays` is not entered:
-  all of its benchmarks use integers, and RInGen failed on every one that we tried.
+* **Integers become Peano numbers.** This loses negative values and subtraction below zero, so
+  RInGen's answers on problems with integers can be wrong (its 2022 track had no integers). It runs on
+  every `ADT-LIA` benchmark, and its answers count as they are: 555 of the 1131 use the sort `Int`.
+  `ADT-LIA-Arrays` is not entered: RInGen failed on every one of its benchmarks that we tried.
 
-On a sample of 120 benchmarks with known verdicts (seed 2026, 60 s each, without the integer filter,
-3 runs at a time on 4 cores of a 2.8 GHz Xeon), RInGen
-answered 30 of the 50 `ADT-LIA` benchmarks without integers correctly (10 of 25 sat, 20 of 25 unsat;
-median 0.8 s, at most 22 s) and none wrongly. Of the 50 with integers it answered 5 correctly and 1
-wrongly (`tip-adt-lia/false_graph_btp5`, unsat, answered sat), which the wrapper now leaves unknown.
-It answered none of the 20 `ADT-LIA-Arrays` benchmarks (all failed within 1 s).
+On a sample of 120 benchmarks with known verdicts (seed 2026, 60 s each, 3 runs at a time on 4 cores
+of a 2.8 GHz Xeon), RInGen answered 30 of the 50 `ADT-LIA` benchmarks without integers correctly
+(10 of 25 sat, 20 of 25 unsat; median 0.8 s, at most 22 s) and none wrongly. Of the 50 with integers
+it answered 5 correctly and 1 wrongly (`tip-adt-lia/false_graph_btp5`, unsat, answered sat). It
+answered none of the 20 `ADT-LIA-Arrays` benchmarks (all failed within 1 s).
 
 ```bash
 make tools/ringen                         # needs git, wget, CMake, a C++ compiler and network access

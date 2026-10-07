@@ -246,8 +246,7 @@ $(TOOLS_DIRECTORY)/refinery:
 # (https://github.com/Columpio/vampire, --mode chccomp) decides. RInGen is built self-contained with the
 # .NET 6 SDK (so no .NET is needed to run it), with patches/ringen.patch: RInGen runs its backend with
 # /usr/bin/time (GNU time), which the patch lets the wrapper replace (wrappers/ringen-time).
-# The wrapper wrappers/ringen-chc runs RInGen with the options of its CHC-COMP 2022 entry, on problems without
-# integers only (it answers unknown on the others, on which RInGen's Peano numbers can give wrong answers).
+# The wrapper wrappers/ringen-chc runs RInGen with the options of its CHC-COMP 2022 entry.
 RINGEN_COMMIT = 058fe6e446489b73e7097e95bc55b984113219d1
 RINGEN_VAMPIRE_COMMIT = 4d2b7f427268470aba104e3dbff0003cc6b9b873
 
