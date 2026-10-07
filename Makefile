@@ -262,7 +262,7 @@ $(TOOLS_DIRECTORY)/ringen:
 		publish -c Release -r linux-x64 --self-contained true -p:PublishReadyToRun=true RInGen.fsproj
 	cp -r $@-build/ringen/bin/Release/net6.0/linux-x64/publish $@/publish
 	cd $@-build/vampire && git init -q && git fetch -q --depth 1 https://github.com/Columpio/vampire $(RINGEN_VAMPIRE_COMMIT) \
-		&& git checkout -q FETCH_HEAD && mkdir build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release && $(MAKE) -j$$(nproc)
+		&& git checkout -q FETCH_HEAD && mkdir build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release && cmake --build . --parallel $$(nproc)
 	cp $@-build/vampire/build/bin/vampire* $@/vampire
 	cp $@-build/vampire/LICENCE $@/LICENCE.vampire
 	cp wrappers/ringen-chc $@/ && cp wrappers/ringen-time $@/time && chmod +x $@/ringen-chc $@/time
@@ -553,11 +553,11 @@ plain-overall-tables:
 			"$$verifier_overall"; \
 	done
 
-# Cross-verifier comparison tables per category (separate model and solver tracks)
+# Cross-verifier comparison tables per category (separate model, solver and proof tracks)
 cross-verifier-tables:
 	@all_categories=""; \
-	for f in results/*-fixed.results.CHC-COMP2026_check-sat.*.xml; do \
-		[ -e "$$f" ] && all_categories="$$all_categories $$(echo "$$f" | sed 's|results/[^.]*-fixed\.results\.CHC-COMP2026_check-sat\.\(.*\)\.xml|\1|')"; \
+	for f in results/*-fixed.results.CHC-COMP2026_check-sat.*.xml results/*-proof-validated.results.CHC-COMP2026_check-sat.*.xml; do \
+		[ -e "$$f" ] && all_categories="$$all_categories $$(echo "$$f" | sed 's|.*\.CHC-COMP2026_check-sat\.\(.*\)\.xml|\1|')"; \
 	done; \
 	for plain_verifier in $(PLAIN_VERIFIERS); do \
 		for f in results/$${plain_verifier}.*results.CHC-COMP2026_check-sat.*.xml; do \
@@ -588,6 +588,17 @@ cross-verifier-tables:
 				--outputpath generated/tables \
 				$$solver_inputs; \
 		fi; \
+		proof_inputs=""; \
+		for f in results/*-proof-validated.results.CHC-COMP2026_check-sat.$${category}.xml; do \
+			[ -e "$$f" ] && proof_inputs="$$proof_inputs $$f"; \
+		done; \
+		if [ -n "$$proof_inputs" ]; then \
+			echo "Generating proof cross-verifier table: $${category}"; \
+			./benchexec/bin/table-generator --no-diff \
+				--name results-$${category}-proof \
+				--outputpath generated/tables \
+				$$proof_inputs; \
+		fi; \
 	done
 
 # Overall cross-verifier comparison tables (all categories combined)
@@ -614,6 +625,17 @@ cross-verifier-overall-tables:
 			--name results-overall-solver \
 			--outputpath generated/tables \
 			$$solver_inputs; \
+	fi; \
+	proof_inputs=""; \
+	for f in results/*-proof-validated.results.CHC-COMP2026_check-sat.xml; do \
+		[ -e "$$f" ] && proof_inputs="$$proof_inputs $$f"; \
+	done; \
+	if [ -n "$$proof_inputs" ]; then \
+		echo "Generating proof overall cross-verifier table"; \
+		./benchexec/bin/table-generator --no-diff \
+			--name results-overall-proof \
+			--outputpath generated/tables \
+			$$proof_inputs; \
 	fi
 
 ############## Prepare GitHub Pages

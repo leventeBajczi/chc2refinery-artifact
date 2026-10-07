@@ -1,11 +1,42 @@
 # CHC-COMP Model Validation
 
+## All results, from a clean checkout
+
+The published CHC-COMP 2026 results cover the solvers of the competition, with their models and
+validations. These commands add every run of this fork (Refinery in the solver, model and proof
+tracks, RInGen, and Golem in the proof track), validate their models and proofs, and generate the
+tables and pages of all solvers, in `generated/`:
+
+```bash
+# BenchExec, the benchmarks, and the tools of the new runs and their validation. Refinery, RInGen and
+# Carcara are built from source, which needs git, wget, cargo, CMake, a C/C++ compiler and network access
+# (Gradle, .NET and cargo fetch dependencies). tools/refinery fetches chc2refinery, a private repository,
+# over SSH: it needs a GitHub key with access to it.
+make benchexec chc-comp26-benchmarks-full \
+     tools/refinery tools/ringen tools/golem tools/z3 tools/cvc5 tools/princess tools/carcara
+make download-results-2026-logfiles       # the 2026 results, with the run logs that the pages link to (5.6 GB)
+make setup-benchmark
+source benchmark-utils/local_config.sh    # or vcloud_config.sh
+# The runs that the 2026 results do not have
+make verification-refinery verification-refinery-model verification-refinery-proof \
+     verification-ringen verification-golem-proof
+# Refinery's models (Z3, cvc5, Princess), and Refinery's and Golem's proofs (Carcara)
+make process-models-refinery
+make z3-validate-refinery-models cvc5-validate-refinery-models princess-validate-refinery-models
+make process-all-proofs validate-all-proofs
+make process-results                      # tables and pages of all solvers, in generated/
+```
+
+The new runs take the competition's limits (up to 30 minutes and 8 cores per benchmark), so they
+need weeks of CPU time on one machine; VCloud runs them in parallel. `make verify-all validate-all`
+would run the solvers of 2026 again too.
+
 ## Refinery
 
 This fork adds one solver to the CHC-COMP 2026 setup (and RInGen hors concours, for comparison, see
-[below](#ringen-hors-concours)): the [Refinery](https://refinery.tools/) graph solver, driven by [chc2refinery](https://github.com/leventeBajczi/chc2refinery), a single
-command that proves CHC problems with Refinery in two modes, which run in parallel (the first
-verdict stops the other):
+[below](#ringen-hors-concours)): the [Refinery](https://refinery.tools/) graph solver, driven by
+[chc2refinery](https://github.com/leventeBajczi/chc2refinery), a single command that proves CHC
+problems with Refinery in two modes, which run in parallel (the first verdict stops the other):
 
 * `--prove-unsat`: a model of the generated Refinery problem is a derivation of `false`, so the
   answer is `unsat` when Refinery finds one, and `sat` when Refinery shows that none exists and
@@ -59,8 +90,8 @@ The answer is `unknown` if neither mode decides (e.g., for unsupported features)
   with induction lemmas. Models without recursive definitions (those of the other solvers) are
   checked as before. A log file that BenchExec cut makes `validate-model.py` stop with an error.
 * [`benchmark-defs/refinery-proof.xml.template`](benchmark-defs/refinery-proof.xml.template) adds a
-  **proof track**, in which only Refinery takes part: on the unsatisfiable benchmarks of LIA-Lin,
-  LIA and LRA-Lin, it runs `--prove-unsat --unsat-alethe`, which prints an
+  **proof track**, in which Refinery and Golem take part: on the unsatisfiable benchmarks of LIA-Lin,
+  LIA and LRA-Lin, Refinery runs `--prove-unsat --unsat-alethe`, which prints an
   [Alethe](https://verit.gitlabpages.uliege.be/alethe/specification.pdf) proof after `unsat`.
   Z3 re-solves the derivation over the original clauses for exact values; the proof instantiates
   the clauses with them and evaluates their constraints with Carcara's `evaluate` rule (see
@@ -68,6 +99,15 @@ The answer is `unknown` if neither mode decides (e.g., for unsupported features)
   once only once (named by `:named`), so a proof grows linearly with its clause instances. Proofs
   cover clauses over Booleans, integers and reals, with the operators of these categories (`div`,
   `mod` and `to_real` among them); an `unsat` without a proof counts as unconfirmed.
+* [`benchmark-defs/golem-proof.xml.template`](benchmark-defs/golem-proof.xml.template) enters Golem
+  0.9.0 in the same categories, with the engines of its solver track and
+  `--print-witness --proof-format alethe`, so an `unsat` answer is followed by Golem's Alethe
+  proof. These are the categories in which Golem prints witnesses (its model track has them too):
+  asked for a witness of a problem with arrays, it stops with an error, so LIA-Lin-Arrays is not
+  entered. In a test on 15 unsat benchmarks of the three categories (seed 2026, 120 s), Carcara
+  accepted all 11 proofs of the answers that Golem gave. With two proof verifiers,
+  `make process-results` also writes cross-verifier tables of the proof track
+  (`results-CATEGORY-proof`, `results-overall-proof`).
 * [`benchmark-defs/carcara-proof-validation.xml.template`](benchmark-defs/carcara-proof-validation.xml.template)
   checks the proofs with [Carcara](https://github.com/ufmg-smite/carcara) at commit `836d5a6` of its
   main branch (2026-10-05; `make tools/carcara` builds it with cargo), with
@@ -256,6 +296,7 @@ Trigger it manually via the Actions tab (`workflow_dispatch`).
 | `make download-all`             | Download all dependencies (tools, benchexec, benchmarks).    |
 | `make download-refinery`        | Download benchexec and the benchmarks, and build only Refinery. |
 | `make download-results-2026`    | Extract the published CHC-COMP 2026 results into `results/`. |
+| `make download-results-2026-logfiles` | The same, with the run logs (5.6 GB).                  |
 | `make setup-benchmark`          | Point benchmarks at the full suite.                          |
 | `make setup-test`               | Point benchmarks at a small smoke-test subset.               |
 | `make verify-all`               | Run all verifiers (plain + model).                           |
@@ -263,5 +304,7 @@ Trigger it manually via the Actions tab (`workflow_dispatch`).
 | `make process-all-models`       | Symlink model logs for all model verifiers.                  |
 | `make validate-all`             | Run all validators against all model verifiers.              |
 | `make VALIDATOR-validate-all`   | Run one validator against all model verifiers (e.g., `cvc5-validate-all`). |
+| `make process-all-proofs`       | Symlink proof logs for all proof verifiers.                  |
+| `make validate-all-proofs`      | Run all proof validators against all proof verifiers.        |
 | `make process-results`          | Generate result tables in `results/tables/`.                 |
 | `make debug-discovery`          | Print auto-discovered verifiers, validators, and targets.    |
