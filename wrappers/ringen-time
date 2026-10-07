@@ -1,0 +1,11 @@
+#!/bin/bash
+# Stands in for GNU time, which RInGen runs its backend with (see patches/ringen.patch):
+#   time --output=FILE --format=%M,%e COMMAND ARGS...
+# It runs COMMAND, writes "memory,seconds" to FILE (memory is not measured: 0) and passes on the exit code.
+out=${1#--output=}
+shift 2
+SECONDS=0
+"$@"
+code=$?
+echo "0,$SECONDS.0" > "$out"
+exit $code

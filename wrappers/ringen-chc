@@ -1,0 +1,57 @@
+#!/usr/bin/env python3
+"""Decide a CHC-COMP benchmark with RInGen (https://github.com/Columpio/RInGen), as in CHC-COMP 2022.
+
+RInGen rewrites a system of CHCs over algebraic datatypes into a formula over uninterpreted
+functions (integers become Peano numbers), which the CHC-COMP fork of Vampire
+(https://github.com/Columpio/vampire, --mode chccomp) decides. This runs the command of RInGen's
+CHC-COMP 2022 entry:
+
+  RInGen --timelimit T -q -o DIR/ solve -s vampire --path INPUT -t
+
+(without its --no-isolation: RInGen's later versions run the transformation in a process of its own
+only with --sync-terms, and have no such option).
+
+The output is the verdict: sat, unsat or unknown. --timelimit=T (seconds, default 1800) bounds
+RInGen and Vampire.
+
+RInGen replaces integers by Peano numbers, so negative values and subtraction below zero are lost,
+and its answers on problems with integers can be wrong (e.g., sat for the unsat
+tip-adt-lia/false_graph_btp5). Its answers are passed on as they are.
+
+RInGen (publish/, self-contained, with patches/ringen.patch), Vampire (vampire), a stand-in for GNU
+time (time) and this script are installed side by side by `make tools/ringen`.
+"""
+import os
+import subprocess
+import sys
+import tempfile
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+
+
+def main(argv: list[str]) -> int:
+    if argv == ['--version']:
+        with open(os.path.join(HERE, 'VERSION')) as f:
+            print(f.readline().strip())
+        return 0
+    timelimit = 1800
+    if argv and argv[0].startswith('--timelimit='):
+        timelimit = max(1, int(float(argv.pop(0).split('=', 1)[1])))
+    if len(argv) != 1:
+        print(f'usage: {sys.argv[0]} [--timelimit=SECONDS] INPUT.smt2', file=sys.stderr)
+        return 2
+    with tempfile.TemporaryDirectory(prefix='ringen-') as work:
+        # RInGen wants full paths; its auxiliary files (the rewritten clauses, the statistics of the
+        # backend run) go to the temporary directory, which is removed afterwards.
+        env = dict(os.environ, vampire=os.path.join(HERE, 'vampire'), RINGEN_TIME=os.path.join(HERE, 'time'),
+                   TMPDIR=work, DOTNET_SYSTEM_GLOBALIZATION_INVARIANT='1', DOTNET_CLI_TELEMETRY_OPTOUT='1')
+        command = [os.path.join(HERE, 'publish', 'RInGen'), '--timelimit', str(timelimit), '-q', '-o', work + os.sep,
+                   'solve', '-s', 'vampire', '--path', os.path.realpath(argv[0]), '-t']
+        result = subprocess.run(command, env=env, stdout=subprocess.PIPE, text=True)
+    verdicts = [line.strip() for line in result.stdout.splitlines() if line.strip() in ('sat', 'unsat', 'unknown')]
+    print(verdicts[-1] if verdicts else 'unknown')
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main(sys.argv[1:]))

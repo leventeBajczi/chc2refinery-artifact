@@ -3,3 +3,4 @@
 # by the organizers to provide meaningful context for other participants.
 # They appear in all result tables but do not receive medals.
 spacer
+ringen

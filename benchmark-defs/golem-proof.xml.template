@@ -1,0 +1,34 @@
+<?xml version="1.0"?>
+<!DOCTYPE benchmark PUBLIC "+//IDN sosy-lab.org//DTD BenchExec benchmark 1.9//EN" "https://www.sosy-lab.org/benchexec/benchmark-2.3.dtd">
+<benchmark tool="golem" timelimit="30 min" hardtimelimit="30 min" memlimit="30 GB" cpuCores="8">
+
+    <!-- The engines of the solver track, with an Alethe proof after every unsat answer (checked by Carcara,
+         carcara-proof-validation). Golem prints witnesses in the categories of its model track: it stops
+         with an error when asked for a witness of a problem with arrays, so LIA-Lin-Arrays is not entered. -->
+    <option name="--print-witness" />
+    <option name="--proof-format">alethe</option>
+
+<rundefinition name="CHC-COMP2026_check-sat">
+  <tasks name="LIA-Lin">
+    <option>--logic=QF_LIA</option>
+    <option>--engine=imc,pdkind,spacer,split-tpa</option>
+    <includesfile>../chc-comp26-benchmarks/LIA-Lin.set</includesfile>
+    <propertyfile expectedverdict="false">../chc-comp26-benchmarks/properties/check-sat.prp</propertyfile>
+  </tasks>
+
+  <tasks name="LRA-Lin">
+    <option>--logic=QF_LRA</option>
+    <option>--engine=imc,kind,pdkind,split-tpa</option>
+    <includesfile>../chc-comp26-benchmarks/LRA-Lin.set</includesfile>
+    <propertyfile expectedverdict="false">../chc-comp26-benchmarks/properties/check-sat.prp</propertyfile>
+  </tasks>
+
+  <tasks name="LIA">
+    <option>--logic=QF_LIA</option>
+    <option>--engine=spacer,pa</option>
+    <includesfile>../chc-comp26-benchmarks/LIA.set</includesfile>
+    <propertyfile expectedverdict="false">../chc-comp26-benchmarks/properties/check-sat.prp</propertyfile>
+  </tasks>
+</rundefinition>
+
+</benchmark>

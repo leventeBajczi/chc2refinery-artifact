@@ -1,11 +1,42 @@
 # CHC-COMP Model Validation
 
+## All results, from a clean checkout
+
+The published CHC-COMP 2026 results cover the solvers of the competition, with their models and
+validations. These commands add every run of this fork (Refinery in the solver, model and proof
+tracks, RInGen, and Golem in the proof track), validate their models and proofs, and generate the
+tables and pages of all solvers, in `generated/`:
+
+```bash
+# BenchExec, the benchmarks, and the tools of the new runs and their validation. Refinery, RInGen and
+# Carcara are built from source, which needs git, wget, cargo, CMake, a C/C++ compiler and network access
+# (Gradle, .NET and cargo fetch dependencies). tools/refinery fetches chc2refinery, a private repository,
+# over SSH: it needs a GitHub key with access to it.
+make benchexec chc-comp26-benchmarks-full \
+     tools/refinery tools/ringen tools/golem tools/z3 tools/cvc5 tools/princess tools/carcara
+make download-results-2026-logfiles       # the 2026 results, with the run logs that the pages link to (5.6 GB)
+make setup-benchmark
+source benchmark-utils/local_config.sh    # or vcloud_config.sh
+# The runs that the 2026 results do not have
+make verification-refinery verification-refinery-model verification-refinery-proof \
+     verification-ringen verification-golem-proof
+# Refinery's models (Z3, cvc5, Princess), and Refinery's and Golem's proofs (Carcara)
+make process-models-refinery
+make z3-validate-refinery-models cvc5-validate-refinery-models princess-validate-refinery-models
+make process-all-proofs validate-all-proofs
+make process-results                      # tables and pages of all solvers, in generated/
+```
+
+The new runs take the competition's limits (up to 30 minutes and 8 cores per benchmark), so they
+need weeks of CPU time on one machine; VCloud runs them in parallel. `make verify-all validate-all`
+would run the solvers of 2026 again too.
+
 ## Refinery
 
-This fork adds one solver to the CHC-COMP 2026 setup: the [Refinery](https://refinery.tools/)
-graph solver, driven by [chc2refinery](https://github.com/leventeBajczi/chc2refinery), a single
-command that proves CHC problems with Refinery in two modes, which run in parallel (the first
-verdict stops the other):
+This fork adds one solver to the CHC-COMP 2026 setup (and RInGen hors concours, for comparison, see
+[below](#ringen-hors-concours)): the [Refinery](https://refinery.tools/) graph solver, driven by
+[chc2refinery](https://github.com/leventeBajczi/chc2refinery), a single command that proves CHC
+problems with Refinery in two modes, which run in parallel (the first verdict stops the other):
 
 * `--prove-unsat`: a model of the generated Refinery problem is a derivation of `false`, so the
   answer is `unsat` when Refinery finds one, and `sat` when Refinery shows that none exists and
@@ -59,8 +90,8 @@ The answer is `unknown` if neither mode decides (e.g., for unsupported features)
   with induction lemmas. Models without recursive definitions (those of the other solvers) are
   checked as before. A log file that BenchExec cut makes `validate-model.py` stop with an error.
 * [`benchmark-defs/refinery-proof.xml.template`](benchmark-defs/refinery-proof.xml.template) adds a
-  **proof track**, in which only Refinery takes part: on the unsatisfiable benchmarks of LIA-Lin,
-  LIA and LRA-Lin, it runs `--prove-unsat --unsat-alethe`, which prints an
+  **proof track**, in which Refinery and Golem take part: on the unsatisfiable benchmarks of LIA-Lin,
+  LIA and LRA-Lin, Refinery runs `--prove-unsat --unsat-alethe`, which prints an
   [Alethe](https://verit.gitlabpages.uliege.be/alethe/specification.pdf) proof after `unsat`.
   Z3 re-solves the derivation over the original clauses for exact values; the proof instantiates
   the clauses with them and evaluates their constraints with Carcara's `evaluate` rule (see
@@ -68,6 +99,15 @@ The answer is `unknown` if neither mode decides (e.g., for unsupported features)
   once only once (named by `:named`), so a proof grows linearly with its clause instances. Proofs
   cover clauses over Booleans, integers and reals, with the operators of these categories (`div`,
   `mod` and `to_real` among them); an `unsat` without a proof counts as unconfirmed.
+* [`benchmark-defs/golem-proof.xml.template`](benchmark-defs/golem-proof.xml.template) enters Golem
+  0.9.0 in the same categories, with the engines of its solver track and
+  `--print-witness --proof-format alethe`, so an `unsat` answer is followed by Golem's Alethe
+  proof. These are the categories in which Golem prints witnesses (its model track has them too):
+  asked for a witness of a problem with arrays, it stops with an error, so LIA-Lin-Arrays is not
+  entered. In a test on 15 unsat benchmarks of the three categories (seed 2026, 120 s), Carcara
+  accepted all 11 proofs of the answers that Golem gave. With two proof verifiers,
+  `make process-results` also writes cross-verifier tables of the proof track
+  (`results-CATEGORY-proof`, `results-overall-proof`).
 * [`benchmark-defs/carcara-proof-validation.xml.template`](benchmark-defs/carcara-proof-validation.xml.template)
   checks the proofs with [Carcara](https://github.com/ufmg-smite/carcara) at commit `836d5a6` of its
   main branch (2026-10-05; `make tools/carcara` builds it with cargo), with
@@ -129,6 +169,47 @@ extracts the run logs (5.6 GB), which the result pages link to. Without the 2026
 `make process-results` generates tables of Refinery alone. Expected verdicts are read from the
 benchmark `.yml` files (`RELABEL_BY_MAJORITY_VOTE = False` in `configs.py`), so no other solver is
 needed to score Refinery's answers.
+
+## RInGen (hors concours)
+
+[RInGen](https://github.com/Columpio/RInGen), the regular invariant generator for CHCs over algebraic
+datatypes, takes part hors concours (`hors_concours.txt`), in `ADT-LIA`, for comparison with
+Refinery's finite models. It entered CHC-COMP 2022 (v1.2, winner of ADT-nonlin, the pure-datatype
+track that CHC-COMP 2026 no longer has) and no later edition, so it has no published 2026 results.
+
+* RInGen rewrites the clauses into a formula over uninterpreted functions: datatypes become free
+  sorts and constructors free functions, and integers become Peano numbers. The CHC-COMP fork of
+  [Vampire](https://github.com/Columpio/vampire) (`--mode chccomp`) then searches for a refutation or a
+  saturation (a finite model), which gives `unsat` or `sat`.
+* [`wrappers/ringen-chc`](wrappers/ringen-chc) runs the command of RInGen's CHC-COMP 2022 entry,
+  `RInGen --timelimit T -q -o DIR/ solve -s vampire --path INPUT -t`, with the run's CPU time limit
+  as `T` (passed by [`tooldefs/ringen.py`](tooldefs/ringen.py); RInGen's own default is 300 s). Its
+  output is the verdict. The entry also passed `--no-isolation`, which the RInGen used here (the last
+  commit of its master branch, `058fe6e`, July 2022, later than the v1.2 of the competition) no
+  longer has: it runs the transformation in a process of its own only with `--sync-terms`.
+* `make tools/ringen` builds RInGen and Vampire from source at fixed commits: RInGen self-contained
+  with the .NET 6 SDK (fetched by `dotnet-install.sh`; no .NET is needed to run it), and Vampire with
+  CMake (without Z3). RInGen runs its backend under `/usr/bin/time` (GNU time) to measure it, which
+  not every machine has; [`patches/ringen.patch`](patches/ringen.patch) lets the wrapper put
+  [`wrappers/ringen-time`](wrappers/ringen-time) in its place.
+* **Integers become Peano numbers.** This loses negative values and subtraction below zero, so
+  RInGen's answers on problems with integers can be wrong (its 2022 track had no integers). It runs on
+  every `ADT-LIA` benchmark, and its answers count as they are: 555 of the 1131 use the sort `Int`.
+  `ADT-LIA-Arrays` is not entered: RInGen failed on every one of its benchmarks that we tried.
+
+On a sample of 120 benchmarks with known verdicts (seed 2026, 60 s each, 3 runs at a time on 4 cores
+of a 2.8 GHz Xeon), RInGen answered 30 of the 50 `ADT-LIA` benchmarks without integers correctly
+(10 of 25 sat, 20 of 25 unsat; median 0.8 s, at most 22 s) and none wrongly. Of the 50 with integers
+it answered 5 correctly and 1 wrongly (`tip-adt-lia/false_graph_btp5`, unsat, answered sat). It
+answered none of the 20 `ADT-LIA-Arrays` benchmarks (all failed within 1 s).
+
+```bash
+make tools/ringen                         # needs git, wget, CMake, a C++ compiler and network access
+make verification-ringen                  # results/ringen.*: ADT-LIA
+```
+
+A `benchexec` checkout cloned before RInGen was added needs its tool definition linked:
+`ln -sf ../../../tooldefs/ringen.py benchexec/benchexec/tools/`.
 
 ## Adding / Editing Solvers
 
@@ -215,6 +296,7 @@ Trigger it manually via the Actions tab (`workflow_dispatch`).
 | `make download-all`             | Download all dependencies (tools, benchexec, benchmarks).    |
 | `make download-refinery`        | Download benchexec and the benchmarks, and build only Refinery. |
 | `make download-results-2026`    | Extract the published CHC-COMP 2026 results into `results/`. |
+| `make download-results-2026-logfiles` | The same, with the run logs (5.6 GB).                  |
 | `make setup-benchmark`          | Point benchmarks at the full suite.                          |
 | `make setup-test`               | Point benchmarks at a small smoke-test subset.               |
 | `make verify-all`               | Run all verifiers (plain + model).                           |
@@ -222,5 +304,7 @@ Trigger it manually via the Actions tab (`workflow_dispatch`).
 | `make process-all-models`       | Symlink model logs for all model verifiers.                  |
 | `make validate-all`             | Run all validators against all model verifiers.              |
 | `make VALIDATOR-validate-all`   | Run one validator against all model verifiers (e.g., `cvc5-validate-all`). |
+| `make process-all-proofs`       | Symlink proof logs for all proof verifiers.                  |
+| `make validate-all-proofs`      | Run all proof validators against all proof verifiers.        |
 | `make process-results`          | Generate result tables in `results/tables/`.                 |
 | `make debug-discovery`          | Print auto-discovered verifiers, validators, and targets.    |
